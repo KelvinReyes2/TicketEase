@@ -1,0 +1,714 @@
+// src/components/Super Admin/DashboardSuperLayout.js
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  getAuth,
+  signOut,
+  createUserWithEmailAndPassword,
+  updateProfile,
+  updatePassword, // ⬅️ added
+} from "firebase/auth";
+import { getFunctions, httpsCallable } from "firebase/functions"; // ⬅️ added
+import { Outlet, Link, useLocation } from "react-router-dom";
+import DataTable from "react-data-table-component";
+
+import LogoM from "../../images/logoM.png";
+import IconDashboard from "../../images/Dashboard White.png";
+import IconActivity from "../../images/Activity White.png";
+import IconAdmin from "../../images/Admin Blue.png";
+import IconMap from "../../images/Map White.png";
+import IconQuota from "../../images/Quota.png";
+import IconUAC from "../../images/UAC White.png";
+import IconKey from "../../images/key.png";
+import IconMaintenance from "../../images/Maintenance White.png";
+
+import { db } from "../../firebase";
+import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
+
+const auth = getAuth();
+
+export default function DashboardSuperLayout() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const location = useLocation();
+
+  const primaryColor = "#364C6E";
+  const hoverBg = "#405a88";
+  const signOutBg = "#ffffff";
+  const signOutBgHover = "#f1f1f1";
+
+  const openModal = () => setIsModalOpen(true);
+  const closeModal = () => setIsModalOpen(false);
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      window.location.href = "/";
+    } catch (error) {
+      alert("Error signing out: " + error.message);
+    }
+  };
+
+  const navLinks = [
+    { to: "/dashboardSuper", img: IconDashboard, label: "Dashboard" },
+    { to: "/activityLogSuper", img: IconActivity, label: "Activity Log" },
+    { to: "/AdminManagementSuper", img: IconAdmin, label: "Admin Management" },
+    { to: "/RouteManagementSuper", img: IconMap, label: "Route Management" },
+    { to: "/QuotaManagementSuper", img: IconQuota, label: "Quota Management" },
+    { to: "/UACSuper", img: IconUAC, label: "User Access Control" },
+    { to: "/PasswordSuper", img: IconKey, label: "Password Reset Request" },
+    { to: "/MaintenanceSuper", img: IconMaintenance, label: "Maintenance" },
+  ];
+
+  const isAdminPage = location.pathname === "/AdminManagementSuper";
+
+  // ---------- Admin state ----------
+  const [admins, setAdmins] = useState([]);
+  const [maxAdminId, setMaxAdminId] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+
+  const [search, setSearch] = useState("");
+  const [filterBy, setFilterBy] = useState("");
+
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [viewing, setViewing] = useState(null);
+  const [edit, setEdit] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [form, setForm] = useState({
+    displayName: "",
+    email: "",
+    password: "",
+    role: "Admin",
+    status: "Active",
+  });
+  const [errors, setErrors] = useState({});
+
+  const toMillis = (v) => {
+    if (!v) return 0;
+    if (typeof v === "string") {
+      const t = Date.parse(v);
+      return Number.isNaN(t) ? 0 : t;
+    }
+    if (v?.seconds) return v.seconds * 1000 + Math.floor((v.nanoseconds || 0) / 1e6);
+    return 0;
+  };
+
+  // Pull ONLY role === "Admin" and derive Admin IDs if missing
+  useEffect(() => {
+    if (!isAdminPage) return;
+    const unsub = onSnapshot(
+      collection(db, "users"),
+      (snap) => {
+        const temp = [];
+        snap.forEach((d) => {
+          const x = d.data() || {};
+          const role = String(x.role || "").trim();
+          if (role.toLowerCase() !== "admin") return; // tolerate different casing
+          temp.push({
+            id: d.id,
+            adminId: Number(x.adminId ?? 0) || 0,
+            displayName: x.username || x.displayName || `${x.firstName ?? ""} ${x.lastName ?? ""}`.trim(),
+            email: x.email ?? "",
+            role: "Admin", // normalize display
+            status: x.status ?? "Active",
+            createdAtMs: toMillis(x.createdAt),
+          });
+        });
+
+        temp.sort((a, b) => {
+          if (a.adminId && b.adminId) return a.adminId - b.adminId;
+          if (a.createdAtMs !== b.createdAtMs) return a.createdAtMs - b.createdAtMs;
+          return (a.displayName || "").localeCompare(b.displayName || "");
+        });
+
+        let next = 1;
+        const withIds = temp.map((r) => {
+          const id = r.adminId || next;
+          next = id + 1;
+          return { ...r, adminId: id };
+        });
+
+        setAdmins(withIds);
+        setMaxAdminId(withIds.reduce((m, r) => Math.max(m, r.adminId || 0), 0));
+        setLoading(false);
+      },
+      (e) => {
+        setErr(e.message || "Failed to load admins");
+        setLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [isAdminPage]); // eslint-disable-line
+
+  const roleOptions = useMemo(
+    () => Array.from(new Set(admins.map((r) => r.role).filter(Boolean))).sort(),
+    [admins]
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return admins.filter((r) => {
+      const text = `${r.adminId} ${r.displayName} ${r.email} ${r.role} ${r.status}`.toLowerCase();
+      const okSearch = !q || text.includes(q);
+      const okFilter = !filterBy || r.status === filterBy || r.role === filterBy;
+      return okSearch && okFilter;
+    });
+  }, [admins, search, filterBy]);
+
+  const StatusBadge = ({ value }) => {
+    const on = (value || "").toLowerCase() === "active";
+    return (
+      <span
+        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+          on ? "bg-green-100 text-green-700 border border-green-200"
+             : "bg-gray-100 text-gray-700 border border-gray-200"
+        }`}
+      >
+        <span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${on ? "bg-green-500" : "bg-gray-400"}`} />
+        {on ? "Active" : (value || "Inactive")}
+      </span>
+    );
+  };
+
+  // Always display “System Admin” in the chip
+  const RoleBadge = () => (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+      System Admin
+    </span>
+  );
+
+  const columns = [
+    {
+      name: "ID",
+      selector: (r) => r.adminId,
+      sortable: true,
+      width: "88px",
+      right: true,
+      style: { justifyContent: "flex-end" },
+    },
+    {
+      name: "Username",
+      selector: (r) => r.displayName,
+      sortable: true,
+      grow: 1.6,
+      cell: (r) => <div className="truncate" title={r.displayName}>{r.displayName}</div>,
+    },
+    {
+      name: "Email",
+      selector: (r) => r.email,
+      sortable: true,
+      grow: 2.0,
+      cell: (r) => <div className="truncate" title={r.email}>{r.email}</div>,
+    },
+    {
+      name: "Role",
+      selector: () => "System Admin",
+      sortable: true,
+      center: true,
+      grow: 0.9,
+      cell: () => <RoleBadge />,
+    },
+    {
+      name: "Status",
+      selector: (r) => r.status,
+      sortable: true,
+      center: true,
+      grow: 0.8,
+      cell: (r) => <StatusBadge value={r.status} />,
+    },
+    {
+      name: "Actions",
+      button: true,
+      center: true,
+      width: "120px",
+      cell: (row) => (
+        <button
+          onClick={() => {
+            setViewing(row);
+            setEdit({
+              displayName: row.displayName,
+              email: row.email,
+              role: "Admin",
+              status: row.status,
+              password: "", // ⬅️ new editable field (optional)
+            });
+          }}
+          title="Edit"
+          className="inline-flex items-center justify-center h-9 px-3 rounded-full border border-gray-200 bg-white text-gray-700 hover:bg-indigo-600 hover:text-white hover:shadow-md transition text-sm font-semibold"
+        >
+          Edit
+        </button>
+      ),
+      ignoreRowClick: true,
+      allowOverflow: true,
+    },
+  ];
+
+  // Wider wrapper + auto table layout to avoid cramped columns
+  const tableStyles = {
+    table: { style: { borderRadius: "1rem", width: "100%", tableLayout: "auto" } },
+    headRow: {
+      style: {
+        minHeight: "40px",
+        backgroundColor: primaryColor,
+        borderTopLeftRadius: "0.75rem",
+        borderTopRightRadius: "0.75rem",
+        borderBottom: "1px solid #e5e7eb",
+        position: "sticky",
+        top: 0,
+        zIndex: 1,
+      },
+    },
+    headCells: {
+      style: {
+        fontWeight: 700,
+        color: "#ffffff",
+        fontSize: "12px",
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+        padding: "10px 12px",
+        alignItems: "center",
+        whiteSpace: "nowrap",
+      },
+    },
+    rows: { style: { minHeight: "44px", borderBottom: "1px solid #f1f5f9" } },
+    cells: {
+      style: {
+        padding: "10px 12px",
+        fontSize: "13px",
+        color: "#0f172a",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      },
+    },
+  };
+
+  // -------- Add / Edit helpers --------
+  const openAdd = () => {
+    setIsAddOpen(true);
+    setForm({ displayName: "", email: "", password: "", role: "Admin", status: "Active" });
+    setErrors({});
+  };
+  const closeAdd = () => { setIsAddOpen(false); setErrors({}); };
+  const onForm = (e) => {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+    if (errors[name]) {
+      const n = { ...errors }; delete n[name]; setErrors(n);
+    }
+  };
+
+  // Create auth user (email+password) then add Firestore user with role "Admin"
+  const saveAdmin = async () => {
+    const e = {};
+    if (!form.displayName.trim()) e.displayName = "Required";
+    if (!form.email.trim()) e.email = "Required";
+    if (!form.password.trim()) e.password = "Required";
+    if (form.password && form.password.length < 6) e.password = "Min 6 characters";
+    setErrors(e);
+    if (Object.keys(e).length) return;
+
+    setSaving(true);
+    try {
+      // 1) Create Authentication user
+      const cred = await createUserWithEmailAndPassword(auth, form.email.trim(), form.password);
+      const { user } = cred;
+
+      // Optional: set displayName on the auth profile
+      try { await updateProfile(user, { displayName: form.displayName.trim() }); } catch {}
+
+      // 2) Compute next adminId
+      const nextId = maxAdminId + 1;
+
+      // 3) Write Firestore user document keyed by auth uid
+      await setDoc(doc(db, "users", user.uid), {
+        adminId: nextId,
+        displayName: form.displayName.trim(),
+        email: form.email.trim(),
+        role: "Admin",
+        status: form.status,
+        createdAt: new Date().toISOString(),
+      });
+
+      closeAdd();
+    } catch (err) {
+      // Common case: auth/email-already-in-use
+      alert(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveEdits = async () => {
+    if (!viewing || !edit) return;
+    if (!edit.displayName || !edit.email) {
+      alert("Display name and email are required.");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      // First, update Firestore fields
+      await setDoc(
+        doc(db, "users", String(viewing.id)),
+        {
+          displayName: edit.displayName,
+          email: edit.email,
+          role: "Admin",
+          status: edit.status,
+        },
+        { merge: true }
+      );
+
+      // Then, if password provided, update Authentication
+      const newPw = (edit.password || "").trim();
+      if (newPw) {
+        if (newPw.length < 6) throw new Error("Password must be at least 6 characters.");
+
+        if (auth.currentUser && auth.currentUser.uid === String(viewing.id)) {
+          // editing self
+          try {
+            await updatePassword(auth.currentUser, newPw);
+          } catch (err) {
+            if (err?.code === "auth/requires-recent-login") {
+              alert("Please sign out and sign back in, then try changing your password again (recent login required).");
+            } else {
+              throw err;
+            }
+          }
+        } else {
+          // editing someone else — requires callable function on backend
+          try {
+            const functions = getFunctions();
+            const adminSetPassword = httpsCallable(functions, "adminSetPassword");
+            await adminSetPassword({ uid: String(viewing.id), password: newPw });
+          } catch {
+            alert("Changing another user's password requires a backend callable function 'adminSetPassword'.");
+          }
+        }
+      }
+
+      setViewing(null);
+      setEdit(null);
+    } catch (err) {
+      alert(err.message || String(err));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // ---------- UI ----------
+  return (
+    <div className="flex bg-gray-100 min-h-screen">
+      {/* Sidebar */}
+      <aside
+        className="w-64 min-h-screen text-white flex flex-col justify-between"
+        style={{ backgroundColor: primaryColor }}
+      >
+        <div className="flex flex-col items-center py-6">
+          <img src={LogoM} alt="VODACTCO Logo" className="w-40 mb-8" />
+          <nav className="w-full px-4 space-y-2 text-sm font-medium">
+            {navLinks.map(({ to, img, label }) => {
+              const isActive = location.pathname === to;
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  className={[
+                    "flex items-center px-4 py-2 rounded-lg transition-all duration-200 ease-in-out",
+                    "hover:scale-[1.02] hover:shadow-md",
+                    isActive ? "font-bold" : "font-medium",
+                  ].join(" ")}
+                  style={{
+                    backgroundColor: isActive ? "white" : "transparent",
+                    color: isActive ? primaryColor : "white",
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = hoverBg; }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = "transparent"; }}
+                >
+                  <img src={img} alt={label} className="w-5 h-5 mr-3 flex-shrink-0 object-contain" draggable="false" />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div className="flex justify-center items-center w-full px-4 pb-6">
+          <button
+            onClick={openModal}
+            className="flex items-center justify-center px-12 py-2 rounded-lg text-gray-800 font-semibold shadow-lg transition duration-200 hover:shadow-xl"
+            style={{ backgroundColor: signOutBg, color: primaryColor }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = signOutBgHover)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = signOutBg)}
+          >
+            Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 p-10 mx-auto">
+        {!isAdminPage ? (
+          <Outlet />
+        ) : (
+          <div className="mx-auto w-full max-w-[1900px]">
+            <div className="bg-white border rounded-xl shadow-sm">
+              <div className="px-6 pt-6 pb-4 border-b flex items-center justify-between">
+                <h1 className="text-2xl font-semibold text-gray-800">Admin Management</h1>
+                <div className="flex items-center gap-3">
+                  <div className="relative flex items-center gap-2 rounded-full border border-gray-200 bg-white shadow-sm px-3 py-1.5">
+                    <select
+                      className="bg-transparent pr-6 text-sm outline-none"
+                      value={filterBy}
+                      onChange={(e) => setFilterBy(e.target.value)}
+                    >
+                      <option value="">Filter By</option>
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                      {roleOptions.map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search"
+                      className="w-[420px] rounded-full border border-gray-200 pl-10 pr-3 py-2.5 text-sm shadow-sm focus:ring-4 focus:ring-blue-100 focus:border-blue-300 outline-none"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                    <div className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-gray-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15.5 14h-.8l-.3-.3A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16a6.471 6.471 0 0 0 4.2-1.6l.3.3v.8l5 5 1.5-1.5-5-5Zm-6 0C7 14 5 12 5 9.5S7 5 9.5 5 14 7 14 9.5 12 14 9.5 14Z" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={openAdd}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-white shadow-md hover:shadow-lg transition"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    <span className="font-semibold">Add Admin</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-6 py-4">
+                {err && (
+                  <div className="mb-3 text-red-700 bg-red-50 border border-red-200 px-3 py-2 rounded">
+                    {err}
+                  </div>
+                )}
+                <DataTable
+                  columns={columns}
+                  data={filtered}
+                  progressPending={loading}
+                  customStyles={tableStyles}
+                  highlightOnHover
+                  striped
+                  dense
+                  persistTableHead
+                  responsive
+                  pagination
+                  paginationComponentOptions={{ noRowsPerPage: true }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Logout Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50" onClick={closeModal}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-semibold text-gray-800 text-center mb-4">Confirm Sign Out</h2>
+            <p className="text-gray-600 text-center mb-6">Are you sure you want to sign out?</p>
+            <div className="flex justify-center gap-4">
+              <button onClick={closeModal} className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition">Cancel</button>
+              <button onClick={handleSignOut} className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-blue-900 transition">Sign Out</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Admin Modal */}
+      {isAdminPage && isAddOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 backdrop-blur-sm p-4" onClick={closeAdd}>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-[760px] max-w-[94%] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="relative flex items中心 justify-between px-6 py-4 border-b bg-white/70 backdrop-blur">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-full grid place-items-center text-white shadow" style={{ backgroundColor: primaryColor }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-800">Add Admin</h2>
+                  <p className="text-xs text-gray-500">Create a new admin account.</p>
+                </div>
+              </div>
+              <button onClick={closeAdd} className="h-8 w-8 rounded-full grid place-items-center border border-gray-200 hover:bg-gray-50" title="Close">
+                <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6 6.4 5z" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-2 gap-x-6 gap-y-5">
+              <div className="col-span-2">
+                <label className="block text-sm text-gray-600 mb-1">Username</label>
+                <input
+                  name="displayName"
+                  className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300 ${errors.displayName ? "border-red-500" : "border-gray-200"}`}
+                  value={form.displayName}
+                  onChange={onForm}
+                />
+                {errors.displayName && <p className="text-red-500 text-xs mt-1">{errors.displayName}</p>}
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-sm text-gray-600 mb-1">Email</label>
+                <input
+                  name="email"
+                  type="email"
+                  className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300 ${errors.email ? "border-red-500" : "border-gray-200"}`}
+                  value={form.email}
+                  onChange={onForm}
+                />
+                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-sm text-gray-600 mb-1">Password</label>
+                <input
+                  name="password"
+                  type="password"
+                  className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300 ${errors.password ? "border-red-500" : "border-gray-200"}`}
+                  value={form.password}
+                  onChange={onForm}
+                  placeholder="Min 6 characters"
+                />
+                {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Role</label>
+                <select name="role" className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300 border-gray-200" value={form.role} onChange={onForm}>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Status</label>
+                <select name="status" className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300 border-gray-200" value={form.status} onChange={onForm}>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t bg-white/70 backdrop-blur flex justify-end gap-3">
+              <button className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700" onClick={closeAdd} disabled={saving}>
+                Cancel
+              </button>
+              <button className="px-4 py-2 rounded-lg text-white hover:opacity-95 disabled:opacity-60 inline-flex items-center gap-2" style={{ backgroundColor: primaryColor }} onClick={saveAdmin} disabled={saving}>
+                {saving && (
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4A4 4 0 004 12z" />
+                  </svg>
+                )}
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Admin Modal */}
+      {isAdminPage && viewing && edit && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 backdrop-blur-sm p-4" onClick={() => { setViewing(null); setEdit(null); }}>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-[720px] max-w-[94%] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="relative flex items-center justify-between px-6 py-4 border-b bg-white/70 backdrop-blur">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-full grid place-items-center text-white shadow" style={{ backgroundColor: primaryColor }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 7h18M3 12h18M3 17h18" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800">Edit Admin</h3>
+                  <p className="text-xs text-gray-500">{viewing.email}</p>
+                </div>
+              </div>
+              <StatusBadge value={edit.status} />
+            </div>
+
+            <div className="p-6 grid grid-cols-2 gap-x-6 gap-y-5 text-sm">
+              <div className="col-span-2">
+                <label className="block text-gray-600 mb-1">Username</label>
+                <input className="w-full border rounded-md px-3 py-2 border-gray-200 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300" value={edit.displayName} onChange={(e) => setEdit({ ...edit, displayName: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-gray-600 mb-1">Email</label>
+                <input type="email" className="w-full border rounded-md px-3 py-2 border-gray-200 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300" value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} />
+              </div>
+
+              {/* ⬇️ NEW: Password field in edit */}
+              <div className="col-span-2">
+                <label className="block text-gray-600 mb-1">New Password</label>
+                <input
+                  type="password"
+                  placeholder="Leave blank to keep current password"
+                  className="w-full border rounded-md px-3 py-2 border-gray-200 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300"
+                  value={edit.password || ""}
+                  onChange={(e) => setEdit({ ...edit, password: e.target.value })}
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Changing your own password may require a recent login. Changing other users’ passwords expects a callable function named <code>adminSetPassword</code>.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-gray-600 mb-1">Role</label>
+                <select className="w-full border rounded-md px-3 py-2 border-gray-200 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300" value={edit.role} onChange={(e) => setEdit({ ...edit, role: e.target.value })}>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-gray-600 mb-1">Status</label>
+                <select className="w-full border rounded-md px-3 py-2 border-gray-200 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300" value={edit.status} onChange={(e) => setEdit({ ...edit, status: e.target.value })}>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t bg-white/70 backdrop-blur flex justify-end gap-3">
+              <button className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700" onClick={() => { setViewing(null); setEdit(null); }} disabled={savingEdit}>
+                Cancel
+              </button>
+              <button className="px-4 py-2 rounded-lg text-white hover:opacity-95 disabled:opacity-60 inline-flex items-center gap-2" style={{ backgroundColor: primaryColor }} onClick={saveEdits} disabled={savingEdit}>
+                {savingEdit && (
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4A4 4 0 004 12z" />
+                  </svg>
+                )}
+                {savingEdit ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
