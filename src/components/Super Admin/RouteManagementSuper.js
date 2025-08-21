@@ -82,8 +82,8 @@ export default function DashboardRouteLayout() {
   // Field-level errors (Add Route)
   const [errors, setErrors] = useState({});
 
-  // Success toast
-  const [showToast, setShowToast] = useState(false);
+  // Success toast for editing route details
+  const [showEditToast, setShowEditToast] = useState(false);
 
   // View/Edit modal
   const [viewing, setViewing] = useState(null);
@@ -130,34 +130,59 @@ export default function DashboardRouteLayout() {
     () => Array.from(new Set(rows.map((r) => r.Route).filter(Boolean))).sort(),
     [rows]
   );
-  const barangayOptions = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.Barangay).filter(Boolean))).sort(),
-    [rows]
-  );
-  const particularOptions = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.Particular).filter(Boolean))).sort(),
-    [rows]
-  );
+ const barangayOptions = useMemo(() => {
+  // Filter the rows to get barangays that match the selected route
+  return Array.from(
+    new Set(
+      rows
+        .filter(r => !routeFilter || r.Route === routeFilter)  // Filter rows by selected route
+        .map(r => r.Barangay)  // Get the Barangay from filtered rows
+        .filter(Boolean)  // Remove any empty or undefined barangays
+    )
+  ).sort();  // Sort the barangays alphabetically
+}, [rows, routeFilter]);
+  const particularOptions = useMemo(() => {
+  // Filter rows to get particulars that match both the selected route and barangay
+  return Array.from(
+    new Set(
+      rows
+        .filter(r => 
+          (!routeFilter || r.Route === routeFilter) &&  // Filter by selected route
+          (!barangayFilter || r.Barangay === barangayFilter)  // Filter by selected barangay
+        )
+        .map(r => r.Particular)  // Get the Particular from filtered rows
+        .filter(Boolean)  // Remove any empty or undefined particulars
+    )
+  ).sort();  // Sort the particulars alphabetically
+}, [rows, routeFilter, barangayFilter]);  // Recalculate when rows, routeFilter, or barangayFilter changes
+
 
   // Apply filters + search
-  const filtered = useMemo(() => {
-    const s = search.trim().toLowerCase();
-    return rows.filter((r) => {
-      const text = `${r.routeId} ${r.Route} ${r.Barangay} ${r.Particular} ${r.KM} ${r.RegularPrice} ${r.SEDprice} ${r.Status}`.toLowerCase();
-      const matchesSearch = !s || text.includes(s);
-      const matchesStatus = !statusFilter || r.Status === statusFilter;
-      const matchesRoute = !routeFilter || r.Route === routeFilter;
-      const matchesBarangay = !barangayFilter || r.Barangay === barangayFilter;
-      const matchesParticular = !particularFilter || r.Particular === particularFilter;
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesRoute &&
-        matchesBarangay &&
-        matchesParticular
-      );
-    });
-  }, [rows, search, statusFilter, routeFilter, barangayFilter, particularFilter]);
+const filtered = useMemo(() => {
+  const s = search.trim().toLowerCase();  // Normalize the search string
+  return rows.filter((r) => {
+    const text = `${r.routeId} ${r.Route} ${r.Barangay} ${r.Particular} ${r.KM} ${r.RegularPrice} ${r.SEDprice} ${r.Status}`.toLowerCase();
+    
+    // Check if the search term matches any text in the row
+    const matchesSearch = !s || text.includes(s);
+
+    // Apply each filter condition dynamically
+    const matchesStatus = !statusFilter || r.Status === statusFilter;
+    const matchesRoute = !routeFilter || r.Route === routeFilter;
+    const matchesBarangay = !barangayFilter || r.Barangay === barangayFilter;
+    const matchesParticular = !particularFilter || r.Particular === particularFilter;
+
+    // Final check for all filters
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesRoute &&
+      matchesBarangay &&
+      matchesParticular
+    );
+  });
+}, [rows, search, statusFilter, routeFilter, barangayFilter, particularFilter]);
+
 
   // ---- formatting helpers ----
   const nfInt = useMemo(() => new Intl.NumberFormat("en-PH"), []);
@@ -207,7 +232,7 @@ export default function DashboardRouteLayout() {
       right: true,
       width: "100px",
       grow: 0,
-      style: { justifyContent: "flex-end", marginRight: "25px" },
+      style: { alignItems: "center" },
       cell: (r) => <Numeric>{nfInt.format(r.routeId)}</Numeric>,
       compact: true,
     },
@@ -215,9 +240,9 @@ export default function DashboardRouteLayout() {
       name: "Route",
       selector: (r) => r.Route,
       sortable: true,
-      width: "150px",
+      width: "10rem",
       grow: 0,
-      style: { justifyContent: "flex-start", marginLeft: "10px" },
+      style: { justifyContent: "flex-end", marginLeft: "2rem" },
       cell: (r) => (
         <div className="truncate" style={{ maxWidth: 300 }} title={r.Route}>
           {r.Route}
@@ -228,9 +253,9 @@ export default function DashboardRouteLayout() {
       name: "Barangay",
       selector: (r) => r.Barangay,
       sortable: true,
-      width: "110px",
+      width: "160px",
       grow: 0,
-      style: { justifyContent: "flex-start", marginLeft: "25px" },
+      style: { justifyContent: "flex-start", marginLeft: "6rem" },
       cell: (r) => (
         <div className="truncate" style={{ maxWidth: 200 }} title={r.Barangay}>
           {r.Barangay}
@@ -241,7 +266,7 @@ export default function DashboardRouteLayout() {
       name: "Particular",
       selector: (r) => r.Particular,
       sortable: true,
-      width: "138px",
+      width: "150px",
       grow: 0,
       style: { justifyContent: "flex-start", marginLeft: "20px" },
       cell: (r) => (
@@ -257,7 +282,7 @@ export default function DashboardRouteLayout() {
       right: true,
       width: "70px",
       grow: 0,
-      style: { justifyContent: "flex-end", marginLeft: "13px" },
+      style: { justifyContent: "flex-end", marginLeft: "2.6rem" },
       cell: (r) => <Numeric>{nfInt.format(r.KM)}</Numeric>,
     },
     {
@@ -265,9 +290,9 @@ export default function DashboardRouteLayout() {
       selector: (r) => r.RegularPrice,
       sortable: true,
       right: true,
-      width: "140px",
+      width: "160px",
       grow: 0,
-      style: { justifyContent: "flex-end" },
+      style: { justifyContent: "flex-end", marginLeft: "1rem" },
       cell: (r) => <Numeric>{`₱ ${nfMoney.format(r.RegularPrice)}`}</Numeric>,
     },
     {
@@ -277,7 +302,7 @@ export default function DashboardRouteLayout() {
       right: true,
       width: "130px",
       grow: 0,
-      style: { marginLeft: "30px" },
+      style: { marginLeft: "3rem" },
       cell: (r) => <Numeric>{`₱ ${nfMoney.format(r.SEDprice)}`}</Numeric>,
     },
     {
@@ -287,7 +312,7 @@ export default function DashboardRouteLayout() {
       center: true,
       width: "120px",
       grow: 0,
-      style: { marginLeft: "30px" },
+      style: { marginLeft: "3.7rem" },
       cell: (r) => (
         <div className="w-full flex justify-center">
           <StatusBadge value={r.Status} />
@@ -298,9 +323,9 @@ export default function DashboardRouteLayout() {
       name: "Action",
       button: true,
       center: true,
-      width: "96px",
+      width: "4rem",
       grow: 0,
-      style: { marginLeft: "25px" },
+      style: { marginLeft: "3rem" },
       cell: (row) => (
         <button
           onClick={() => {
@@ -315,7 +340,7 @@ export default function DashboardRouteLayout() {
               Status: row.Status,
             });
           }}
-          className="group inline-flex items-center justify-center h-9 w-9 rounded-full border border-gray-200 bg-white text-gray-600 hover:text-white hover:shadow-md transition hover:-translate-y-0.5"
+          className="group inline-flex items-center justify-center h-9 w-9 rounded-full border border-gray-200 bg-white text-gray-600 hover:shadow-md transition hover:-translate-y-0.5"
           style={{ backgroundColor: "#fff" }}
           title="View"
         >
@@ -359,13 +384,12 @@ export default function DashboardRouteLayout() {
       style: {
         fontWeight: 700,
         color: "#ffffffff",
-        fontSize: "12px",
+        fontSize: "14px",
         textTransform: "uppercase",
         letterSpacing: "0.04em",
         padding: "10px 12px",
-        alignItems: "center",
-        whiteSpace: "nowrap",
-        marginLeft: "20px",
+        textAlign: "center",
+        marginLeft: "2.5rem",
       },
     },
     rows: {
@@ -374,18 +398,18 @@ export default function DashboardRouteLayout() {
         borderBottom: "1px solid #f1f5f9",
       },
       highlightOnHoverStyle: {
-        backgroundColor: "#f8fafc",
+        backgroundColor: "#e2e2e2ff",
         transition: "background 120ms ease",
       },
       stripedStyle: {
-        backgroundColor: "#ffffff",
+        backgroundColor: "#f8f8f8ff",
       },
     },
     cells: {
       style: {
-        padding: "10px 12px",
+        padding: "10px 10px",
         alignItems: "center",
-        fontSize: "13px",
+        fontSize: "14px",
         color: "#0f172a",
         fontVariantNumeric: "tabular-nums",
         whiteSpace: "nowrap",
@@ -455,9 +479,6 @@ export default function DashboardRouteLayout() {
         Status: form.Status || "Active",
       });
       closeAdd();
-
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 2600);
     } catch (e) {
       alert(e.message || String(e));
     } finally {
@@ -493,6 +514,10 @@ export default function DashboardRouteLayout() {
       );
       setViewing(null);
       setEdit(null);
+
+      // Show the success toast animation for edit
+      setShowEditToast(true);
+      setTimeout(() => setShowEditToast(false), 3000); // Hide after 3 seconds
     } catch (e) {
       alert(e.message || String(e));
     } finally {
@@ -558,19 +583,22 @@ export default function DashboardRouteLayout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-2 p-10 mx-auto">
-        <div className="mx-auto max-w-[1580px]">
+      <main className="flex-1 p-10 mx-auto">
+        <div className="mx-auto max-w-[1800px]">
           <div
             className={`bg-white border rounded-xl shadow-sm relative ${
               isAddOpen || (viewing && edit) ? "overflow-hidden" : ""
             }`}
+            style={{
+              height: "54rem", // Fixed height for the entire frame
+            }}
           >
             {/* Header */}
             <div className="px-6 pt-6 pb-4 border-b flex items-center justify-between">
               <h1 className="text-2xl font-semibold text-gray-800">Route Management</h1>
               <button
                 onClick={openAdd}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-white shadow-md hover:shadow-lg transition"
+                className="flex items-center gap-1 px-10 py-2 rounded-lg text-white shadow-md hover:shadow-lg transition"
                 style={{ backgroundColor: primaryColor }}
               >
                 <svg
@@ -591,7 +619,7 @@ export default function DashboardRouteLayout() {
 
             {/* Filters */}
             <div className="px-6 py-4 flex flex-wrap items-center gap-3">
-              <div className="relative flex items-center gap-2 rounded-full border border-gray-200 bg-white shadow-sm px-3 py-1.5">
+              <div className="relative flex items-center gap-2 rounded-lg border border-gray-300 bg-white shadow-lg hover:shadow-xl focus-within:ring-1 focus-within:ring-blue-300 px-3 py-2">
                 <span className="text-gray-400">
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
                     <path d="M12 2a10 10 0 100 20 10 10 0 000-20Zm-1 5h2v6h-2V7Zm1 10a1.5 1.5 0 110-3 1.5 1.5 0 010 3Z" />
@@ -608,7 +636,7 @@ export default function DashboardRouteLayout() {
                 </select>
               </div>
 
-              <div className="relative flex items-center gap-2 rounded-full border border-gray-200 bg-white shadow-sm px-3 py-1.5">
+              <div className="relative flex items-center gap-2 rounded-lg border border-gray-300 bg-white shadow-lg hover:shadow-xl focus-within:ring-1 focus-within:ring-blue-300 px-3 py-2">
                 <span className="text-gray-400">
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
                     <path d="M3 12l7-9 7 9-7 9-7-9Zm7 5.5L7.5 12 10 8.5 12.5 12 10 17.5Z" />
@@ -617,18 +645,22 @@ export default function DashboardRouteLayout() {
                 <select
                   className="bg-transparent pr-6 text-sm outline-none"
                   value={routeFilter}
-                  onChange={(e) => setRouteFilter(e.target.value)}
-                >
+                  onChange={(e) => {
+                    setRouteFilter(e.target.value);
+                    setBarangayFilter(''); // Clear barangay filter
+                    setParticularFilter(''); // Clear particular filter
+                  }}
+                > 
                   <option value="">All Routes</option>
-                  {routeOptions.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
+                  {routeOptions.map((route) => (
+                    <option key={route} value={route}> 
+                      {route}
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div className="relative flex items-center gap-2 rounded-full border border-gray-200 bg-white shadow-sm px-3 py-1.5">
+              <div className="relative flex items-center gap-2 rounded-lg border border-gray-300 bg-white shadow-lg hover:shadow-xl focus-within:ring-1 focus-within:ring-blue-300 px-3 py-2">
                 <span className="text-gray-400">
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
                     <path d="M4 10l8-6 8 6v8a2 2 0 0 1-2 2h-3v-6H9v6H6a2 2 0 0 1-2-2v-8Z" />
@@ -648,7 +680,7 @@ export default function DashboardRouteLayout() {
                 </select>
               </div>
 
-              <div className="relative flex items-center gap-2 rounded-full border border-gray-200 bg-white shadow-sm px-3 py-1.5">
+              <div className="relative flex items-center gap-2 rounded-lg border border-gray-300 bg-white shadow-lg hover:shadow-xl focus-within:ring-1 focus-within:ring-blue-300 px-3 py-2">
                 <span className="text-gray-400">
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
                     <path d="M5 5h14v4H5V5Zm0 6h9v4H5v-4Zm0 6h14v2H5v-2Z" />
@@ -700,6 +732,8 @@ export default function DashboardRouteLayout() {
                 responsive
                 pagination
                 paginationComponentOptions={{ noRowsPerPage: true }}
+                paginationPerPage={14}
+                style={{ width: "100%" }}
               />
             </div>
 
@@ -710,13 +744,13 @@ export default function DashboardRouteLayout() {
                 onClick={closeAdd}
               >
                 <div
-                  className="relative bg-white rounded-2xl shadow-2xl w-[1000px] max-w-[94%] max-h-[88vh] overflow-hidden"
+                  className="relative bg-white rounded-2xl shadow-2xl w-[100px] max-w-[100%] overflow-hidden"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-blue-100/70 via-indigo-100/50 to-sky-50/60" />
 
                   {/* Header */}
-                  <div className="relative flex items-center justify-between px-6 py-4 border-b bg-white/70 backdrop-blur">
+                  <div className="relative flex items-center justify-between px-6 py-6 border-b bg-white/70 backdrop-blur">
                     <div className="flex items-center gap-3">
                       <div
                         className="h-10 w-10 rounded-full grid place-items-center text-white shadow"
@@ -743,7 +777,7 @@ export default function DashboardRouteLayout() {
 
                     <button
                       onClick={closeAdd}
-                      className="h-9 w-9 rounded-full grid place-items-center border border-gray-200 hover:bg-gray-50"
+                      className="h-10 w-10 rounded-full grid place-items-center border border-gray-200 hover:bg-gray-50"
                       title="Close"
                     >
                       <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor">
@@ -753,8 +787,8 @@ export default function DashboardRouteLayout() {
                   </div>
 
                   {/* Body: two-column grid */}
-                  <div className="relative p-6 overflow-y-auto max-h-[calc(88vh-56px-64px)]">
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+                  <div className="relative p-12 overflow-y-auto max-h-[calc(88vh-56px-64px)]">
+                    <div className="grid grid-cols-3 gap-x-8 gap-y-9">
                       {/* Route – full width */}
                       <div className="col-span-2">
                         <label className="block text-sm text-gray-600 mb-1">Route</label>
@@ -906,13 +940,13 @@ export default function DashboardRouteLayout() {
                 }}
               >
                 <div
-                  className="relative bg-white rounded-2xl shadow-2xl w-[960px] max-w-[94%] max-h-[88vh] overflow-hidden"
+                  className="relative bg-white rounded-2xl shadow-2xl w-[960px] max-w-[100%] overflow-hidden"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-indigo-100/60 via-blue-100/50 to-sky-50/50" />
 
                   {/* Header */}
-                  <div className="relative flex items-center justify-between px-6 py-4 border-b bg-white/70 backdrop-blur">
+                  <div className="relative flex items-center justify-between px-6 py-6 border-b bg-white/70 backdrop-blur">
                     <div className="flex items-center gap-3">
                       <div
                         className="h-10 w-10 rounded-full grid place-items-center text-white shadow"
@@ -932,7 +966,7 @@ export default function DashboardRouteLayout() {
                         </svg>
                       </div>
                       <div>
-                        <h3 className="text-base font-semibold text-gray-800">Route Details</h3>
+                        <h3 className="text-lg font-semibold text-gray-800">Route Details</h3>
                         <p className="text-xs text-gray-500">Route ID: {viewing.routeId}</p>
                       </div>
                     </div>
@@ -941,8 +975,8 @@ export default function DashboardRouteLayout() {
                   </div>
 
                   {/* Body */}
-                  <div className="relative p-6 overflow-y-auto max-h-[calc(88vh-56px-64px)]">
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-5 text-sm">
+                  <div className="relative p-12 overflow-y-auto max-h-[calc(88vh-50px-64px)]">
+                    <div className="grid grid-cols-3 gap-x-8 gap-y-9 text-sm">
                       {/* Route – full width */}
                       <div className="col-span-2">
                         <label className="block text-gray-600 mb-1">Route</label>
@@ -1065,11 +1099,11 @@ export default function DashboardRouteLayout() {
         </div>
       </main>
 
-      {/* Toast: New Route Added (top-center) */}
+      {/* Toast: Route Updated Successfully (top-center) */}
       <div
         aria-live="polite"
         className={`fixed top-5 left-1/2 -translate-x-1/2 z-[60] transform transition-all duration-300 ${
-          showToast ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3 pointer-events-none"
+          showEditToast ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3 pointer-events-none"
         }`}
       >
         <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-green-800 shadow-md w-[520px] max-w-[90vw]">
@@ -1079,8 +1113,8 @@ export default function DashboardRouteLayout() {
             </svg>
           </div>
           <div className="text-sm">
-            <div className="font-semibold">New route added successfully</div>
-            <div className="text-green-700/80">Your route is now in the list.</div>
+            <div className="font-semibold">Route updated successfully</div>
+            <div className="text-green-700/80">Your route details have been updated.</div>
           </div>
         </div>
       </div>
