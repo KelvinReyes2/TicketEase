@@ -189,7 +189,7 @@ export default function DashboardSuperLayout() {
       right: true,
     },
     {
-      name: "Full Name",
+      name: "Username",
       selector: (r) => r.displayName,
       sortable: true,
       grow: 1,
@@ -516,7 +516,7 @@ export default function DashboardSuperLayout() {
               <div className="px-6 pt-6 pb-4 border-b flex items-center justify-between">
                 <h1 className="text-2xl font-semibold text-gray-800">Admin Management</h1>
                 <div className="flex items-center gap-3">
-                  <div className="relative flex items-center gap-2 rounded-full border border-gray-200 bg-white shadow-sm px-3 py-1.5">
+                  <div className="relative flex items-center gap-2 rounded-lg border border-gray-300 bg-white shadow-lg hover:shadow-xl focus-within:ring-1 focus-within:ring-blue-300 px-3 py-2">
                     <select
                       className="bg-transparent pr-6 text-sm outline-none"
                       value={filterBy}
