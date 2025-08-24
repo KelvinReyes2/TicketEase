@@ -117,7 +117,7 @@ export default function DashboardUACLayout() {
           onClick={closeModal}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm"
+            className="bg-white rounded-xl shadow-2xl p-12 px-20 w/full max-w-l"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-xl font-semibold text-gray-800 text-center mb-4">

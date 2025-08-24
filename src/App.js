@@ -34,47 +34,47 @@ function App() {
         {/* Admin-only */}
         <Route
           path="/dashboardAdmin"
-          element={<PrivateRoute element={DashboardAdmin} allowedRoles={["admin"]} />}
+          element={<PrivateRoute element={DashboardAdmin} allowedRoles={["Admin"]} />}
         />
 
         {/* Cashier-only */}
         <Route
           path="/dashboardCashier"
-          element={<PrivateRoute element={DashboardCashier} allowedRoles={["cashier"]} />}
+          element={<PrivateRoute element={DashboardCashier} allowedRoles={["Cashier"]} />}
         />
 
         {/* Super-only (all these pages) */}
         <Route
           path="/dashboardSuper"
-          element={<PrivateRoute element={DashboardSuper} allowedRoles={["super"]} />}
+          element={<PrivateRoute element={DashboardSuper} allowedRoles={["Super"]} />}
         />
         <Route
           path="/activityLogSuper"
-          element={<PrivateRoute element={ActivityLogSuper} allowedRoles={["super"]} />}
+          element={<PrivateRoute element={ActivityLogSuper} allowedRoles={["Super"]} />}
         />
         <Route
           path="/AdminManagementSuper"
-          element={<PrivateRoute element={AdminManagement} allowedRoles={["super"]} />}
+          element={<PrivateRoute element={AdminManagement} allowedRoles={["Super"]} />}
         />
         <Route
           path="/RouteManagementSuper"
-          element={<PrivateRoute element={RouteManagement} allowedRoles={["super"]} />}
+          element={<PrivateRoute element={RouteManagement} allowedRoles={["Super"]} />}
         />
         <Route
           path="/QuotaManagementSuper"
-          element={<PrivateRoute element={QuotaManagement} allowedRoles={["super"]} />}
+          element={<PrivateRoute element={QuotaManagement} allowedRoles={["Super"]} />}
         />
         <Route
           path="/UACSuper"
-          element={<PrivateRoute element={UserAccess} allowedRoles={["super"]} />}
+          element={<PrivateRoute element={UserAccess} allowedRoles={["Super"]} />}
         />
         <Route
           path="/PasswordSuper"
-          element={<PrivateRoute element={PassRest} allowedRoles={["super"]} />}
+          element={<PrivateRoute element={PassRest} allowedRoles={["Super"]} />}
         />
         <Route
           path="/MaintenanceSuper"
-          element={<PrivateRoute element={Maintenance} allowedRoles={["super"]} />}
+          element={<PrivateRoute element={Maintenance} allowedRoles={["Super"]} />}
         />
 
         {/* Forbidden + catch-all */}

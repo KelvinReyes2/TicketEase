@@ -5,11 +5,11 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
   updatePassword,
-} from "firebase/auth";  
+} from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import DataTable from "react-data-table-component";
-import { FaEdit } from "react-icons/fa"; // Importing a new edit icon
+import { FaEdit } from "react-icons/fa";
 
 import LogoM from "../../images/logoM.png";
 import IconDashboard from "../../images/Dashboard White.png";
@@ -39,6 +39,7 @@ export default function DashboardSuperLayout() {
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
+
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -159,21 +160,22 @@ export default function DashboardSuperLayout() {
     const on = (value || "").toLowerCase() === "active";
     return (
       <span
-        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${on
-          ? "bg-green-100 text-green-700 border border-green-200"
-          : "bg-gray-100 text-gray-700 border border-gray-200"
+        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+          on
+            ? "bg-green-100 text-green-700 border border-green-200"
+            : "bg-gray-100 text-gray-700 border border-gray-200"
         }`}
       >
         <span
-          className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${on ? "bg-green-500" : "bg-gray-400"
-            }`}
+          className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${
+            on ? "bg-green-500" : "bg-gray-400"
+          }`}
         />
         {on ? "Active" : value || "Inactive"}
       </span>
     );
   };
 
-  // Always display “System Admin” in the chip
   const RoleBadge = () => (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
       System Admin
@@ -183,7 +185,7 @@ export default function DashboardSuperLayout() {
   const columns = [
     {
       name: "ID",
-      selector: (r) => r._row, // computed row number
+      selector: (r) => r._row,
       sortable: false,
       width: "88px",
       right: true,
@@ -244,13 +246,13 @@ export default function DashboardSuperLayout() {
               status: row.status,
               telNo: row.telNo,
               address: row.address,
-              password: "", // Empty password for edit
+              password: "",
             });
           }}
           title="Edit"
           className="inline-flex items-center justify-center h-9 px-3 rounded-full border border-gray-200 bg-white text-gray-700 hover:shadow-md transition text-sm font-semibold"
         >
-          <FaEdit size={14} /> {/* Using the FaEdit icon here */}
+          <FaEdit size={14} />
         </button>
       ),
       ignoreRowClick: true,
@@ -328,7 +330,7 @@ export default function DashboardSuperLayout() {
     }
   };
 
-  // Create auth user (email+password) then add Firestore user with role "Admin"
+  // Create auth user then add Firestore profile
   const saveAdmin = async () => {
     const e = {};
     if (!form.firstName.trim()) e.firstName = "Required";
@@ -352,7 +354,6 @@ export default function DashboardSuperLayout() {
         await updateProfile(user, { displayName: `${form.firstName} ${form.lastName}` });
       } catch {}
 
-      // Only store the fields you need. No adminId.
       await setDoc(doc(db, "users", user.uid), {
         firstName: form.firstName.trim(),
         middleName: form.middleName.trim(),
@@ -365,10 +366,9 @@ export default function DashboardSuperLayout() {
         createdAt: new Date().toISOString(),
       });
 
-      // Show success toast for adding admin
       setToastMessage("New admin added successfully!");
       setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 3000); // Hide after 3 seconds
+      setTimeout(() => setShowSuccessToast(false), 3000);
 
       closeAdd();
     } catch (err) {
@@ -378,14 +378,17 @@ export default function DashboardSuperLayout() {
     }
   };
 
+  // Save edits + DIRECT password update behavior
   const saveEdits = async () => {
     if (!viewing || !edit) return;
     if (!edit.firstName || !edit.lastName || !edit.email) {
       alert("First name, last name, and email are required.");
       return;
     }
+
     setSavingEdit(true);
     try {
+      // 1) Update Firestore profile
       await setDoc(
         doc(db, "users", String(viewing.id)),
         {
@@ -401,31 +404,39 @@ export default function DashboardSuperLayout() {
         { merge: true }
       );
 
+      // 2) If a new password is provided, update in Firebase Auth
       const newPw = (edit.password || "").trim();
       if (newPw) {
-        if (newPw.length < 6) throw new Error("Password must be at least 6 characters.");
+        if (newPw.length < 6) {
+          throw new Error("Password must be at least 6 characters.");
+        }
 
+        // If editing yourself, update directly on currentUser
         if (auth.currentUser && auth.currentUser.uid === String(viewing.id)) {
           try {
             await updatePassword(auth.currentUser, newPw);
           } catch (err) {
             if (err?.code === "auth/requires-recent-login") {
               alert(
-                "Please sign out and sign back in, then try changing your password again (recent login required)."
+                "For security, Google requires a recent login to change your own password. Please sign out and sign back in, then try again."
               );
             } else {
               throw err;
             }
           }
         } else {
+          // Editing another user: requires Admin SDK via callable function
           try {
             const functions = getFunctions();
             const adminSetPassword = httpsCallable(functions, "adminSetPassword");
             await adminSetPassword({ uid: String(viewing.id), password: newPw });
-          } catch {
-            alert(
-              "Changing another user's password requires a backend callable function 'adminSetPassword'."
-            );
+          } catch (err) {
+            // If function is not deployed or fails, surface a clear message
+            const msg =
+              err?.message ||
+              "Changing another user's password requires a backend callable function 'adminSetPassword'.";
+
+            alert(msg);
           }
         }
       }
@@ -433,10 +444,9 @@ export default function DashboardSuperLayout() {
       setViewing(null);
       setEdit(null);
 
-      // Show success toast for editing admin details
       setToastMessage("Admin details updated successfully!");
       setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 3000); // Hide after 3 seconds
+      setTimeout(() => setShowSuccessToast(false), 3000);
     } catch (err) {
       alert(err.message || String(err));
     } finally {
@@ -511,7 +521,7 @@ export default function DashboardSuperLayout() {
           <div className="mx-auto w-full max-w-[1900px]">
             <div
               className="bg-white border rounded-xl shadow-sm flex flex-col"
-              style={{ minHeight: "calc(100vh - 112px)" }} // make the frame tall
+              style={{ minHeight: "calc(100vh - 112px)" }}
             >
               <div className="px-6 pt-6 pb-4 border-b flex items-center justify-between">
                 <h1 className="text-2xl font-semibold text-gray-800">Admin Management</h1>
@@ -589,7 +599,7 @@ export default function DashboardSuperLayout() {
                   pagination
                   paginationComponentOptions={{ noRowsPerPage: true }}
                   fixedHeader
-                  fixedHeaderScrollHeight="70vh" // make the table area tall
+                  fixedHeaderScrollHeight="70vh"
                 />
               </div>
             </div>
@@ -597,11 +607,9 @@ export default function DashboardSuperLayout() {
         )}
       </main>
 
-      {/* Success Toast (Admin added or edited successfully) */}
+      {/* Success Toast */}
       {showSuccessToast && (
-        <div
-          className="fixed top-5 left-1/2 -translate-x-1/2 z-[60] transform transition-all duration-300 opacity-100 translate-y-0"
-        >
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[60] transform transition-all duration-300 opacity-100 translate-y-0">
           <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-green-800 shadow-md w-[520px] max-w-[90vw]">
             <div className="mt-0.5">
               <svg viewBox="0 0 24 24" className="h-5 w-5 fill-green-500">
@@ -622,7 +630,7 @@ export default function DashboardSuperLayout() {
           onClick={closeModal}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm"
+            className="bg-white rounded-xl shadow-2xl p-12 px-20 w/full max-w-l"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-xl font-semibold text-gray-800 text-center mb-4">
@@ -845,7 +853,7 @@ export default function DashboardSuperLayout() {
           </div>
         </div>
       )}
-      
+
       {/* Edit Admin Modal */}
       {isAdminPage && viewing && edit && (
         <div
@@ -920,17 +928,7 @@ export default function DashboardSuperLayout() {
                   className="w-full border rounded-md px-3 py-2 border-gray-200 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300"
                   value={edit.email}
                   onChange={(e) => setEdit({ ...edit, email: e.target.value })}
-                />
-              </div>
-
-              <div className="col-span-2">
-                <label className="block text-gray-600 mb-1">Password</label>
-                <input
-                  type="password"
-                  placeholder="Minimum of 6 Characters"
-                  className="w-full border rounded-md px-3 py-2 border-gray-200 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300"
-                  value={edit.password || ""}
-                  onChange={(e) => setEdit({ ...edit, password: e.target.value })}
+                  disabled
                 />
               </div>
 
@@ -943,7 +941,7 @@ export default function DashboardSuperLayout() {
                 />
               </div>
 
-              <div className="col-span-3">
+              <div className="col-span-2">
                 <label className="block text-gray-600 mb-1">Telephone No.</label>
                 <input
                   className="w-full border rounded-md px-3 py-2 border-gray-200 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300"
@@ -1008,4 +1006,4 @@ export default function DashboardSuperLayout() {
       )}
     </div>
   );
-} 
+}

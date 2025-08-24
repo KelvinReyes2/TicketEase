@@ -8,6 +8,8 @@ import {
   getDocs,
   addDoc,
   serverTimestamp,
+  doc,
+  onSnapshot,
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { KeyRound } from "lucide-react";
@@ -15,7 +17,8 @@ import { KeyRound } from "lucide-react";
 // import images
 import MainLogo from "../images/MainLogo.png";
 import SideLogo from "../images/SideLogo.png";
-
+import server from "../images/serverMaintenance.png";
+import { motion } from "framer-motion";
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,22 +28,44 @@ function Login() {
   // forgot password states
   const [showReset, setShowReset] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
-  const [resetPassword, setResetPassword] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const [resetMessageType, setResetMessageType] = useState(""); // success, warning, error
   const [resetLoading, setResetLoading] = useState(false);
 
+  // maintenance states
+  const [systemStatus, setSystemStatus] = useState("Operational Mode");
+  const [systemMessage, setSystemMessage] = useState("");
+
   const navigate = useNavigate();
 
-  // Check for existing request in localStorage on component mount
+  // 🔹 Listen to Firestore system status in real-time
   useEffect(() => {
-    // Clean up old localStorage entries (older than 24 hours)
+    const systemDocRef = doc(db, "system", "Status"); // 👈 adjust if your doc id differs
+    const unsubscribe = onSnapshot(
+      systemDocRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setSystemStatus(data.status || "Operational Mode");
+          setSystemMessage(data.message || "The system is under maintenance.");
+        }
+      },
+      (error) => {
+        console.error("Error fetching system status:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // 🔹 Clean up old localStorage entries (password reset cache)
+  useEffect(() => {
     const cleanupOldEntries = () => {
       const keys = Object.keys(localStorage);
-      keys.forEach(key => {
-        if (key.startsWith('passwordReset_')) {
-          const data = JSON.parse(localStorage.getItem(key) || '{}');
-          const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+      keys.forEach((key) => {
+        if (key.startsWith("passwordReset_")) {
+          const data = JSON.parse(localStorage.getItem(key) || "{}");
+          const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
           if (data.timestamp && data.timestamp < twentyFourHoursAgo) {
             localStorage.removeItem(key);
           }
@@ -50,64 +75,63 @@ function Login() {
     cleanupOldEntries();
   }, []);
 
-  // Check if user has recent pending request
   const hasRecentPendingRequest = (email) => {
     const key = `passwordReset_${email}`;
     const data = localStorage.getItem(key);
     if (data) {
       const parsedData = JSON.parse(data);
-      const oneHourAgo = Date.now() - (15 * 60 * 1000); 
-      return parsedData.timestamp > oneHourAgo && parsedData.status === 'pending';
+      const oneHourAgo = Date.now() - 10 * 1000; // 10s throttle
+      return parsedData.timestamp > oneHourAgo && parsedData.status === "pending";
     }
     return false;
   };
 
-  // Store request in localStorage
   const storeRequestLocally = (email) => {
     const key = `passwordReset_${email}`;
     const data = {
       timestamp: Date.now(),
-      status: 'pending'
+      status: "pending",
     };
     localStorage.setItem(key, JSON.stringify(data));
   };
 
-  // Helper function to get user-friendly error messages
   const getFirebaseErrorMessage = (error) => {
     switch (error.code) {
-      case 'auth/user-not-found':
-        return 'No user account found with that email address.';
-      case 'auth/wrong-password':
-        return 'Incorrect password. Please try again.';
-      case 'auth/invalid-email':
-        return 'Please enter a valid email address.';
-      case 'auth/user-disabled':
-        return 'This account has been disabled. Please contact support.';
-      case 'auth/too-many-requests':
-        return 'Too many failed login attempts. Please try again later.';
-      case 'auth/invalid-credential':
-        return 'Incorrect email or password. Please try again.';
-      case 'auth/network-request-failed':
-        return 'Network error. Please check your connection and try again.';
-      case 'auth/operation-not-allowed':
-        return 'Email/password sign in is not enabled. Please contact support.';
+      case "auth/user-not-found":
+        return "No user account found with that email address.";
+      case "auth/wrong-password":
+        return "Incorrect password. Please try again.";
+      case "auth/invalid-email":
+        return "Please enter a valid email address.";
+      case "auth/user-disabled":
+        return "This account has been disabled. Please contact support.";
+      case "auth/too-many-requests":
+        return "Too many failed login attempts. Please try again later.";
+      case "auth/invalid-credential":
+        return "Incorrect email or password. Please try again.";
+      case "auth/network-request-failed":
+        return "Network error. Please check your connection and try again.";
+      case "auth/operation-not-allowed":
+        return "Email/password sign in is not enabled. Please contact support.";
       default:
-        return error.message || 'An error occurred during login. Please try again.';
+        return error.message || "An error occurred during login. Please try again.";
     }
   };
 
   // 🔹 Login handler
   const handleLogin = async (e) => {
     e.preventDefault();
+
+    if (systemStatus === "Maintenance Mode") {
+      setError("The system is currently under maintenance. Please try again later.");
+      return;
+    }
+
     setError("");
     setLoading(true);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const userEmail = userCredential.user.email;
 
       const usersRef = collection(db, "users");
@@ -135,14 +159,13 @@ function Login() {
         setError("No user role found in the database.");
       }
     } catch (err) {
-      // Use the helper function to get user-friendly error messages
       setError(getFirebaseErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
-  // 🔹 Reset password request with local duplicate check
+  // 🔹 Reset password request
   const handleResetPassword = async (e) => {
     e.preventDefault();
     setResetMessage("");
@@ -150,15 +173,15 @@ function Login() {
     setResetLoading(true);
 
     try {
-      // Check for recent pending request in localStorage first
       if (hasRecentPendingRequest(resetEmail)) {
-        setResetMessage("You already submitted a password reset request recently. Please wait at least 15 minutes before submitting another request.");
+        setResetMessage(
+          "You already submitted a password reset request recently. Please wait before submitting another."
+        );
         setResetMessageType("warning");
         setResetLoading(false);
         return;
       }
 
-      // Check if user exists
       const usersRef = collection(db, "users");
       const userQuery = query(usersRef, where("email", "==", resetEmail));
       const userSnapshot = await getDocs(userQuery);
@@ -175,29 +198,25 @@ function Login() {
 
       const requestsRef = collection(db, "passwordRequestReset");
       const existingQuery = query(
-        requestsRef, 
+        requestsRef,
         where("user", "==", resetEmail),
         where("status", "==", "pending")
       );
-      
-      try {
-        const existingSnapshot = await getDocs(existingQuery);
-        
-        if (!existingSnapshot.empty) {
-          storeRequestLocally(resetEmail);
-          setResetMessage("You already have a pending password reset request. Please wait for Super Admin's approval.");
-          setResetMessageType("warning");
-          setResetLoading(false);
-          return;
-        }
-      } catch (permissionError) {
-        console.warn("Cannot check existing requests due to permissions, using localStorage fallback");
+
+      const existingSnapshot = await getDocs(existingQuery);
+      if (!existingSnapshot.empty) {
+        storeRequestLocally(resetEmail);
+        setResetMessage(
+          "You already have a pending password reset request. Please wait for Super Admin's approval."
+        );
+        setResetMessageType("warning");
+        setResetLoading(false);
+        return;
       }
 
       await addDoc(requestsRef, {
         user: resetEmail,
         role: userRole,
-        newPassword: resetPassword,
         status: "pending",
         requestedAt: serverTimestamp(),
         approvedBy: null,
@@ -210,38 +229,23 @@ function Login() {
       );
       setResetMessageType("success");
       setResetEmail("");
-      setResetPassword("");
-      
     } catch (err) {
       console.error("Reset password error:", err);
-      
-      // Check if it might be a duplicate error
-      if (err.message.includes('already exists') || 
-          err.message.includes('duplicate') ||
-          err.code === 'already-exists') {
-        storeRequestLocally(resetEmail);
-        setResetMessage("You already have a pending password reset request. Please wait for Super Admin's approval.");
-        setResetMessageType("warning");
-      } else {
-        setResetMessage("Error submitting request: " + err.message);
-        setResetMessageType("error");
-      }
+      setResetMessage("Error submitting request: " + err.message);
+      setResetMessageType("error");
     } finally {
       setResetLoading(false);
     }
   };
 
-  // Reset fields when closing the reset password frame
   const closeResetFrame = () => {
     setShowReset(false);
     setResetEmail("");
-    setResetPassword("");
     setResetMessage("");
     setResetMessageType("");
     setResetLoading(false);
   };
 
-  // Clear error when user starts typing
   const handleEmailChange = (e) => {
     setEmail(e.target.value);
     if (error) setError("");
@@ -252,6 +256,75 @@ function Login() {
     if (error) setError("");
   };
 
+
+
+  if (systemStatus === "Maintenance Mode") {
+    return (
+       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
+      <div className="absolute inset-0 z-0">
+        <svg
+          className="absolute top-0 left-0 w-full h-full opacity-50"
+          xmlns="http://www.w3.org/2000/svg"
+          preserveAspectRatio="none"
+          viewBox="0 0 800 600"
+        >
+          <path
+            d="M0,200 C150,300 350,100 500,200 C650,300 850,100 1000,200 L1000,00 L0,0 Z"
+            fill="#196cd1ff"
+            opacity="1"
+          />
+          <path
+            d="M0,400 C200,500 400,300 600,400 C800,500 1000,300 1200,400 L1200,0 L0,0 Z"
+            fill="#1a69e0ff"
+            opacity="0.5"
+          />
+        </svg>
+      </div>
+
+      <div className="w-full max-w-[900px] flex flex-col items-center text-center px-6 z-10">
+        {/* 🖼️ Server Image with BounceIn */}
+        <div className="mb-8 flex justify-center">
+          <motion.img
+            src={server}
+            alt="Server Maintenance"
+            className="w-70 md:w-[420px] drop-shadow-lg"
+            initial={{ scale: 0.3, opacity: 0, y: -100 }}
+            animate={{
+              scale: [0.3, 1.2, 0.9, 1.05, 1],
+              opacity: 1,
+              y: 0,
+            }}
+            transition={{
+              duration: 1.2,
+              ease: "easeOut",
+            }}
+          />
+        </div>
+
+        <motion.h1
+          className="text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight tracking-wide mt-20"
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 1, duration: 0.8 }}
+        >
+          System <br />
+          <span className="text-blue-600 drop-shadow-2xl  ">Maintenance</span>
+        </motion.h1>
+
+        <motion.p
+          className="text-gray-600 text-lg md:text-xl font-medium mt-4"
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 1.5, duration: 0.8 }}
+        >
+          {systemMessage || "We’re currently working on improvements. Please check back soon."}
+        </motion.p>
+      </div>
+    </div>
+    );
+  }
+
+  // 🔹 Normal login screen
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200">
       {loading && (
@@ -289,7 +362,7 @@ function Login() {
             <input
               type="email"
               className={`mt-1 w-full p-4 text-base border rounded-lg shadow-md focus:outline-none focus:ring-4 focus:ring-indigo-300 transition-all duration-300 ${
-                error ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                error ? "border-red-300 bg-red-50" : "border-gray-300"
               }`}
               placeholder="Enter email..."
               value={email}
@@ -306,7 +379,7 @@ function Login() {
             <input
               type="password"
               className={`mt-1 w-full p-4 text-base border rounded-lg shadow-md focus:outline-none focus:ring-4 focus:ring-indigo-300 transition-all duration-300 ${
-                error ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                error ? "border-red-300 bg-red-50" : "border-gray-300"
               }`}
               placeholder="Enter password..."
               value={password}
@@ -348,55 +421,45 @@ function Login() {
       {showReset && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-lg relative animate-fadeInUp">
-            {/* Header */}
             <div className="flex flex-col items-center text-center">
               <div className="w-16 h-16 flex items-center justify-center rounded-full bg-indigo-100 text-indigo-600 mb-4">
                 <KeyRound size={32} strokeWidth={2.5} />
               </div>
               <h3 className="text-2xl font-bold text-gray-800">Reset Your Password</h3>
               <p className="text-gray-500 mt-2 mb-6 text-sm">
-                Enter your registered email and a new password. Your request will be reviewed by the Super Admin.
+                Enter your registered email. Your request will be reviewed by the Super Admin.
               </p>
             </div>
 
-            {/* Messages */}
             {resetMessage && (
-              <div className={`w-full px-5 py-3 rounded-lg text-sm font-medium text-center mb-4 ${
-                resetMessageType === "error" 
-                  ? "bg-red-50 border border-red-300 text-red-700" 
-                  : resetMessageType === "success"
-                  ? "bg-green-50 border border-green-300 text-green-700"
-                  : "bg-yellow-50 border border-yellow-300 text-yellow-700"
-              }`}>
+              <div
+                className={`w-full px-5 py-3 rounded-lg text-sm font-medium text-center mb-4 ${
+                  resetMessageType === "error"
+                    ? "bg-red-50 border border-red-300 text-red-700"
+                    : resetMessageType === "success"
+                    ? "bg-green-50 border border-green-300 text-green-700"
+                    : "bg-yellow-50 border border-yellow-300 text-yellow-700"
+                }`}
+              >
                 {resetMessage}
               </div>
             )}
 
-            {/* Form */}
             <form onSubmit={handleResetPassword} className="space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Email
+                </label>
                 <input
                   type="email"
                   className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-4 focus:ring-indigo-300 transition-all ${
-                    resetMessageType === "error" ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    resetMessageType === "error"
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-300"
                   }`}
                   placeholder="Enter your email..."
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
-                  disabled={resetLoading}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">New Password Request</label>
-                <input
-                  type="password"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-4 focus:ring-indigo-300 transition-all"
-                  placeholder="Enter new password..."
-                  value={resetPassword}
-                  onChange={(e) => setResetPassword(e.target.value)}
                   disabled={resetLoading}
                   required
                 />
@@ -411,20 +474,19 @@ function Login() {
               </button>
             </form>
 
-            {/* Close */}
             <button
               onClick={closeResetFrame}
               disabled={resetLoading}
               className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg 
-                width="16" 
-                height="16" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
                 strokeLinejoin="round"
               >
                 <line x1="18" y1="6" x2="6" y2="18"></line>
