@@ -8,16 +8,14 @@ import {
 import { Outlet, Link, useLocation } from "react-router-dom";
 import DataTable from "react-data-table-component";
 import { FaEdit } from "react-icons/fa";
+import { CSVLink } from "react-csv";
 
 import LogoM from "../../images/logoM.png";
 import IconDashboard from "../../images/Dashboard White.png";
-import IconActivity from "../../images/Activity White.png";
-import IconAdmin from "../../images/Admin Blue.png";
-import IconMap from "../../images/Map White.png";
-import IconQuota from "../../images/Quota.png";
-import IconUAC from "../../images/UAC White.png";
-import IconKey from "../../images/key.png";
-import IconMaintenance from "../../images/Maintenance White.png";
+import IconUnit from "../../images/Monitoring White.png";
+import IconUser from "../../images/Admin Blue.png";
+import IconDriver from "../../images/Driver White.png";
+import IconVehicle from "../../images/Vehicle White.png";
 
 import { db } from "../../firebase";
 import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
@@ -48,25 +46,22 @@ export default function DashboardSuperLayout() {
   };
 
   const navLinks = [
-    { to: "/dashboardSuper", img: IconDashboard, label: "Dashboard" },
-    { to: "/activityLogSuper", img: IconActivity, label: "Activity Log" },
-    { to: "/AdminManagementSuper", img: IconAdmin, label: "Admin Management" },
-    { to: "/RouteManagementSuper", img: IconMap, label: "Route Management" },
-    { to: "/QuotaManagementSuper", img: IconQuota, label: "Quota Management" },
-    { to: "/UACSuper", img: IconUAC, label: "User Access Control" },
-    { to: "/PasswordSuper", img: IconKey, label: "Password Reset Request" },
-    { to: "/MaintenanceSuper", img: IconMaintenance, label: "Maintenance" },
+    { to: "/dashboardAdmin", img: IconDashboard, label: "Dashboard" },
+    { to: "/unitTracking", img: IconUnit, label: "Unit Tracking" },
+    { to: "/userManagement", img: IconUser, label: "User Management" },
+    { to: "/driverDispatch", img: IconDriver, label: "Driver Dispatch" },
+    { to: "/vehicleManagement", img: IconVehicle, label: "Vehicle Management" },
   ];
 
-  const isAdminPage = location.pathname === "/AdminManagementSuper";
+  const isUserPage = location.pathname === "/userManagement";
 
-  // ---------- Admin state ----------
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
 
   const [search, setSearch] = useState("");
   const [filterBy, setFilterBy] = useState("");
+  const [filterRole, setFilterRole] = useState(""); // Added filter by role
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -80,7 +75,7 @@ export default function DashboardSuperLayout() {
     lastName: "",
     email: "",
     password: "",
-    role: "Admin",
+    role: "Driver",
     status: "Active",
     address: "",
     telNo: "",
@@ -98,7 +93,7 @@ export default function DashboardSuperLayout() {
   };
 
   useEffect(() => {
-    if (!isAdminPage) return;
+    if (!isUserPage) return;
     const unsub = onSnapshot(
       collection(db, "users"),
       (snap) => {
@@ -106,20 +101,25 @@ export default function DashboardSuperLayout() {
         snap.forEach((d) => {
           const x = d.data() || {};
           const role = String(x.role || "").trim();
-          if (role.toLowerCase() !== "admin") return;
-          temp.push({
-            id: d.id,
-            displayName: `${x.firstName || ""} ${x.middleName || ""} ${x.lastName || ""}`.trim(),
-            email: x.email ?? "",
-            role: "Admin",
-            status: x.status ?? "Active",
-            telNo: x.telNo ?? "",
-            createdAtMs: toMillis(x.createdAt),
-            firstName: x.firstName,
-            middleName: x.middleName,
-            lastName: x.lastName,
-            address: x.address,
-          });
+
+          // Exclude "Admin" role
+          if (
+            ["Driver", "Cashier", "Reliever", "Conductor", "Inspector"].includes(role)
+          ) {
+            temp.push({
+              id: d.id,
+              displayName: `${x.firstName || ""} ${x.middleName || ""} ${x.lastName || ""}`.trim(),
+              email: x.email ?? "",
+              role: x.role ?? "Driver",
+              status: x.status ?? "Active",
+              telNo: x.telNo ?? "",
+              createdAtMs: toMillis(x.createdAt),
+              firstName: x.firstName,
+              middleName: x.middleName,
+              lastName: x.lastName,
+              address: x.address,
+            });
+          }
         });
 
         temp.sort((a, b) => {
@@ -136,7 +136,7 @@ export default function DashboardSuperLayout() {
       }
     );
     return () => unsub();
-  }, [isAdminPage]);
+  }, [isUserPage]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -144,13 +144,14 @@ export default function DashboardSuperLayout() {
       const text = `${r.displayName} ${r.email} ${r.role} ${r.status} ${r.telNo}`.toLowerCase();
       const okSearch = !q || text.includes(q);
       const okFilter = !filterBy || r.status === filterBy;
-      return okSearch && okFilter;
+      const okRoleFilter = !filterRole || r.role === filterRole; // Filter by role
+      return okSearch && okFilter && okRoleFilter;
     });
-  }, [admins, search, filterBy]);
+  }, [admins, search, filterBy, filterRole]);
 
   // Add a computed row number for display
   const filteredWithRowNumber = useMemo(
-    () => filtered.map((r, i) => ({ ...r, _row: i + 1 })),
+    () => filtered.map((r, i) => ({ ...r, _row: i + 1 })), // Row number starts from 1
     [filtered]
   );
 
@@ -174,9 +175,9 @@ export default function DashboardSuperLayout() {
     );
   };
 
-  const RoleBadge = () => (
+  const RoleBadge = ({ role }) => (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
-      System Admin
+      {role}
     </span>
   );
 
@@ -212,11 +213,11 @@ export default function DashboardSuperLayout() {
     },
     {
       name: "Role",
-      selector: () => "System Admin",
+      selector: (r) => r.role,
       sortable: true,
       center: true,
       grow: 1,
-      cell: () => <RoleBadge />,
+      cell: (r) => <RoleBadge role={r.role} />,
     },
     {
       name: "Status",
@@ -240,7 +241,7 @@ export default function DashboardSuperLayout() {
               middleName: row.middleName,
               lastName: row.lastName,
               email: row.email,
-              role: "Admin",
+              role: row.role,
               status: row.status,
               telNo: row.telNo,
               address: row.address,
@@ -305,7 +306,7 @@ export default function DashboardSuperLayout() {
       lastName: "",
       email: "",
       password: "",
-      role: "Admin",
+      role: "Driver",  // Role set to Driver by default
       status: "Active",
       address: "",
       telNo: "",
@@ -357,14 +358,14 @@ export default function DashboardSuperLayout() {
         middleName: form.middleName.trim(),
         lastName: form.lastName.trim(),
         email: form.email.trim(),
-        role: "Admin",
+        role: form.role,  // Save selected role
         status: form.status,
         telNo: form.telNo.trim(),
         address: form.address.trim(),
         createdAt: new Date().toISOString(),
       });
 
-      setToastMessage("New admin added successfully!");
+      setToastMessage("New user added successfully!");
       setShowSuccessToast(true);
       setTimeout(() => setShowSuccessToast(false), 3000);
 
@@ -376,6 +377,7 @@ export default function DashboardSuperLayout() {
     }
   };
 
+  // Save edits + DIRECT password update behavior
   const saveEdits = async () => {
     if (!viewing || !edit) return;
     if (!edit.firstName || !edit.lastName || !edit.email) {
@@ -393,7 +395,7 @@ export default function DashboardSuperLayout() {
           middleName: edit.middleName,
           lastName: edit.lastName,
           email: edit.email,
-          role: "Admin",
+          role: edit.role,  // Save the updated role
           status: edit.status,
           telNo: edit.telNo,
           address: edit.address,
@@ -404,7 +406,7 @@ export default function DashboardSuperLayout() {
       setViewing(null);
       setEdit(null);
 
-      setToastMessage("Admin details updated successfully!");
+      setToastMessage("User details updated successfully!");
       setShowSuccessToast(true);
       setTimeout(() => setShowSuccessToast(false), 3000);
     } catch (err) {
@@ -475,7 +477,7 @@ export default function DashboardSuperLayout() {
 
       {/* Main Content */}
       <main className="flex-1 p-10 mx-auto">
-        {!isAdminPage ? (
+        {!isUserPage ? (
           <Outlet />
         ) : (
           <div className="mx-auto w-full max-w-[1900px]">
@@ -484,7 +486,7 @@ export default function DashboardSuperLayout() {
               style={{ minHeight: "calc(100vh - 112px)" }}
             >
               <div className="px-6 pt-6 pb-4 border-b flex items-center justify-between">
-                <h1 className="text-2xl font-semibold text-gray-800">Admin Management</h1>
+                <h1 className="text-2xl font-semibold text-gray-800">User Management</h1>
                 <div className="flex items-center gap-3">
                   <div className="relative flex items-center gap-2 rounded-lg border border-gray-300 bg-white shadow-lg hover:shadow-xl focus-within:ring-1 focus-within:ring-blue-300 px-3 py-2">
                     <select
@@ -495,6 +497,22 @@ export default function DashboardSuperLayout() {
                       <option value="">Filter By</option>
                       <option value="Active">Active</option>
                       <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+
+                  {/* Filter by Role */}
+                  <div className="relative flex items-center gap-2 rounded-lg border border-gray-300 bg-white shadow-lg hover:shadow-xl focus-within:ring-1 focus-within:ring-blue-300 px-3 py-2">
+                    <select
+                      className="bg-transparent pr-6 text-sm outline-none"
+                      value={filterRole}
+                      onChange={(e) => setFilterRole(e.target.value)}
+                    >
+                      <option value="">Filter by Role</option>
+                      <option value="Driver">Driver</option>
+                      <option value="Cashier">Cashier</option>
+                      <option value="Reliever">Reliever</option>
+                      <option value="Conductor">Conductor</option>
+                      <option value="Inspector">Inspector</option>
                     </select>
                   </div>
 
@@ -518,6 +536,29 @@ export default function DashboardSuperLayout() {
                     </div>
                   </div>
 
+                  {/* Export to CSV */}
+                            <CSVLink
+                data={filteredWithRowNumber.map((item) => {
+                    const { _row, ...rest } = item;  // Remove the _row field
+                    return { ...rest, id: item._row }; // Replace 'id' with the row number
+                })}
+                className="flex items-center gap-2 px-9 py-2 rounded-lg text-white shadow-md hover:shadow-lg transition"
+                style={{ backgroundColor: primaryColor }}
+                >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                >
+                    <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span className="font-semibold">Export</span>
+                </CSVLink>
                   <button
                     onClick={openAdd}
                     className="flex items-center gap-2 px-9 py-2 rounded-lg text-white shadow-md hover:shadow-lg transition"
@@ -535,7 +576,7 @@ export default function DashboardSuperLayout() {
                     >
                       <path d="M12 5v14M5 12h14" />
                     </svg>
-                    <span className="font-semibold">Add Admin</span>
+                    <span className="font-semibold">Add User</span>
                   </button>
                 </div>
               </div>
@@ -618,7 +659,7 @@ export default function DashboardSuperLayout() {
       )}
 
       {/* Add Admin Modal */}
-      {isAdminPage && isAddOpen && (
+      {isUserPage && isAddOpen && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 backdrop-blur-sm p-4"
           onClick={closeAdd}
@@ -647,8 +688,8 @@ export default function DashboardSuperLayout() {
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-800">Add Admin</h2>
-                  <p className="text-xs text-gray-500">Create a new admin account.</p>
+                  <h2 className="text-lg font-semibold text-gray-800">Add User</h2>
+                  <p className="text-xs text-gray-500">Create a new user account.</p>
                 </div>
               </div>
               <button
@@ -774,6 +815,22 @@ export default function DashboardSuperLayout() {
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>
+
+              <div className="col-span-1">
+                <label className="block text-sm text-gray-600 mb-1">Role</label>
+                <select
+                  name="role"
+                  value={form.role}
+                  onChange={onForm}
+                  className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300"
+                >
+                  <option value="Driver">Driver</option>
+                  <option value="Cashier">Cashier</option>
+                  <option value="Reliever">Reliever</option>
+                  <option value="Conductor">Conductor</option>
+                  <option value="Inspector">Inspector</option>
+                </select>
+              </div>
             </div>
 
             <div className="px-6 py-4 border-t bg-white/70 backdrop-blur flex justify-end gap-3">
@@ -815,7 +872,7 @@ export default function DashboardSuperLayout() {
       )}
 
       {/* Edit Admin Modal */}
-      {isAdminPage && viewing && edit && (
+      {isUserPage && viewing && edit && (
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-black/40 backdrop-blur-sm p-4"
           onClick={() => {
@@ -847,7 +904,7 @@ export default function DashboardSuperLayout() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-gray-800">Edit Admin</h3>
+                  <h3 className="text-base font-semibold text-gray-800">Edit User</h3>
                   <p className="text-xs text-gray-500">{viewing.email}</p>
                 </div>
               </div>
@@ -920,6 +977,22 @@ export default function DashboardSuperLayout() {
                 >
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+
+              <div className="col-span-1">
+                <label className="block text-gray-600 mb-1">Role</label>
+                <select
+                  name="role"
+                  value={edit.role}
+                  onChange={(e) => setEdit({ ...edit, role: e.target.value })}
+                  className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300"
+                >
+                  <option value="Driver">Driver</option>
+                  <option value="Cashier">Cashier</option>
+                  <option value="Reliever">Reliever</option>
+                  <option value="Conductor">Conductor</option>
+                  <option value="Inspector">Inspector</option>
                 </select>
               </div>
             </div>

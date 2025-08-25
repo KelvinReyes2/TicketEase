@@ -4,6 +4,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 
 import Login from "./components/login";
 import DashboardAdmin from "./components/Admin/dashboardAdmin";
+import UnitTracking from "./components/Admin/unitTracking";
+import UserManagement from "./components/Admin/userManagement"
+import DriverDispatch from "./components/Admin/driverDispatch";
+import VehicleManagement from "./components/Admin/vehicleManagement";
 import DashboardCashier from "./components/Cashier/dashboardCashier";
 import DashboardSuper from "./components/Super Admin/dashboardSuper";
 import ActivityLogSuper from "./components/Super Admin/activityLogSuper";
@@ -35,6 +39,22 @@ function App() {
         <Route
           path="/dashboardAdmin"
           element={<PrivateRoute element={DashboardAdmin} allowedRoles={["Admin"]} />}
+        />
+        <Route
+          path="/unitTracking"
+          element={<PrivateRoute element={UnitTracking} allowedRoles={["Admin"]} />}
+        />
+        <Route
+          path="/userManagement"
+          element={<PrivateRoute element={UserManagement} allowedRoles={["Admin"]} />}
+        />
+        <Route
+          path="/driverDispatch"
+          element={<PrivateRoute element={DriverDispatch} allowedRoles={["Admin"]} />}
+        />
+        <Route
+          path="/vehicleManagement"
+          element={<PrivateRoute element={VehicleManagement} allowedRoles={["Admin"]} />}
         />
 
         {/* Cashier-only */}
