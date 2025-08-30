@@ -770,7 +770,7 @@ export default function DashboardSuperLayout() {
                   onChange={onForm}
                   className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-300"
                 >
-                  <option value="Active">Active</option>
+                  <option value="Active" classname="text-blue bg-white">Active</option>
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>

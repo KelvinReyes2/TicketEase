@@ -8,15 +8,17 @@ import {
 import { Outlet, Link, useLocation } from "react-router-dom";
 import DataTable from "react-data-table-component";
 import { FaEdit } from "react-icons/fa";
-import { CSVLink } from "react-csv";
-
 import LogoM from "../../images/logoM.png";
 import IconDashboard from "../../images/Dashboard White.png";
 import IconUnit from "../../images/Monitoring White.png";
 import IconUser from "../../images/Admin Blue.png";
 import IconDriver from "../../images/Driver White.png";
 import IconVehicle from "../../images/Vehicle White.png";
-
+import Papa from 'papaparse';
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, PageOrientation, AlignmentType } from "docx";
+import jsPDF from 'jspdf';
+import "jspdf-autotable";
+import { saveAs } from 'file-saver';
 import { db } from "../../firebase";
 import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
 
@@ -27,6 +29,10 @@ export default function DashboardSuperLayout() {
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const location = useLocation();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const toggleDropdown = () => {
+    setIsDropdownOpen((prev) => !prev);
+  };
 
   const primaryColor = "#364C6E";
   const hoverBg = "#405a88";
@@ -35,7 +41,7 @@ export default function DashboardSuperLayout() {
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
-
+  
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -44,6 +50,383 @@ export default function DashboardSuperLayout() {
       alert("Error signing out: " + error.message);
     }
   };
+
+  // Excel Export function
+const exportToCSV = () => {
+  // Prepare the headers and data rows
+  const headers = ["ID", "Username", "Email", "Role", "Status", "Tel No", "Address", "Created At"];
+   
+  const rows = filteredWithRowNumber.map((item) => {
+    // Format phone number to prevent scientific notation
+    const phoneNumber = `="${item.telNo}"`;
+    
+    // Format timestamp to readable date
+    const createdAt = new Date(item.createdAt).toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    return [
+      item._row,               // ID
+      item.displayName,        // Username
+      item.email,              // Email
+      item.role,               // Role
+      item.status,             // Status
+      phoneNumber,             // Tel No - forced as text to prevent scientific notation
+      item.address,            // Address
+      createdAt                // Created At in readable format
+    ];
+  });
+
+  // Combine headers and rows into a final data array
+  const data = [headers, ...rows];
+
+  // Convert to CSV format using PapaParse
+  const csv = Papa.unparse(data);
+
+  // Create a Blob from the CSV data
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+
+  // Trigger the download using FileSaver.js
+  saveAs(blob, "user-management-report.csv");
+};
+
+
+const exportToWord = () => {
+  const doc = new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            size: {
+              orientation: PageOrientation.LANDSCAPE,
+            },
+            margin: {
+              top: 720,
+              right: 720,
+              bottom: 720,
+              left: 720,
+            },
+          },
+        },
+        children: [
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "User Management Report",
+                bold: true,
+                size: 48, // Increased from 32
+                font: "Arial",
+                color: "364C6E",
+              }),
+            ],
+            spacing: {
+              after: 600, // Increased spacing
+            },
+            alignment: AlignmentType.CENTER,
+          }),
+          new Table({
+            width: {
+              size: 100,
+              type: WidthType.PERCENTAGE,
+            },
+            rows: [
+              // Header row
+              new TableRow({
+                children: [
+                  new TableCell({
+                    children: [new Paragraph({ 
+                      children: [new TextRun({ 
+                        text: "ID", 
+                        bold: true, 
+                        color: "FFFFFF", 
+                        font: "Arial",
+                        size: 24 // Larger header font
+                      })],
+                      alignment: AlignmentType.CENTER
+                    })],
+                    shading: { fill: "364C6E" },
+                    margins: { top: 200, bottom: 200, left: 100, right: 100 },
+                  }),
+                  new TableCell({
+                    children: [new Paragraph({ 
+                      children: [new TextRun({ 
+                        text: "Username", 
+                        bold: true, 
+                        color: "FFFFFF", 
+                        font: "Arial",
+                        size: 24
+                      })],
+                      alignment: AlignmentType.CENTER
+                    })],
+                    shading: { fill: "364C6E" },
+                    margins: { top: 200, bottom: 200, left: 100, right: 100 },
+                  }),
+                  new TableCell({
+                    children: [new Paragraph({ 
+                      children: [new TextRun({ 
+                        text: "Email", 
+                        bold: true, 
+                        color: "FFFFFF", 
+                        font: "Arial",
+                        size: 24
+                      })],
+                      alignment: AlignmentType.CENTER
+                    })],
+                    shading: { fill: "364C6E" },
+                    margins: { top: 200, bottom: 200, left: 100, right: 100 },
+                  }),
+                  new TableCell({
+                    children: [new Paragraph({ 
+                      children: [new TextRun({ 
+                        text: "Role", 
+                        bold: true, 
+                        color: "FFFFFF", 
+                        font: "Arial",
+                        size: 24
+                      })],
+                      alignment: AlignmentType.CENTER
+                    })],
+                    shading: { fill: "364C6E" },
+                    margins: { top: 200, bottom: 200, left: 100, right: 100 },
+                  }),
+                  new TableCell({
+                    children: [new Paragraph({ 
+                      children: [new TextRun({ 
+                        text: "Status", 
+                        bold: true, 
+                        color: "FFFFFF", 
+                        font: "Arial",
+                        size: 24
+                      })],
+                      alignment: AlignmentType.CENTER
+                    })],
+                    shading: { fill: "364C6E" },
+                    margins: { top: 200, bottom: 200, left: 100, right: 100 },
+                  }),
+                  new TableCell({
+                    children: [new Paragraph({ 
+                      children: [new TextRun({ 
+                        text: "Tel No", 
+                        bold: true, 
+                        color: "FFFFFF", 
+                        font: "Arial",
+                        size: 24
+                      })],
+                      alignment: AlignmentType.CENTER
+                    })],
+                    shading: { fill: "364C6E" },
+                    margins: { top: 200, bottom: 200, left: 100, right: 100 },
+                  }),
+                  new TableCell({
+                    children: [new Paragraph({ 
+                      children: [new TextRun({ 
+                        text: "Address", 
+                        bold: true, 
+                        color: "FFFFFF", 
+                        font: "Arial",
+                        size: 24
+                      })],
+                      alignment: AlignmentType.CENTER
+                    })],
+                    shading: { fill: "364C6E" },
+                    margins: { top: 200, bottom: 200, left: 100, right: 100 },
+                  }),
+                  new TableCell({
+                    children: [new Paragraph({ 
+                      children: [new TextRun({ 
+                        text: "Created At", 
+                        bold: true, 
+                        color: "FFFFFF", 
+                        font: "Arial",
+                        size: 24
+                      })],
+                      alignment: AlignmentType.CENTER
+                    })],
+                    shading: { fill: "364C6E" },
+                    margins: { top: 200, bottom: 200, left: 100, right: 100 },
+                  }),
+                ],
+              }),
+              // Data rows
+              ...filteredWithRowNumber.map((item) => {
+                // Format timestamp to readable date
+                const createdAt = item.createdAt 
+                  ? new Date(item.createdAt).toLocaleString('en-US', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true
+                    })
+                  : "N/A";
+
+                return new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({ 
+                        children: [new TextRun({ 
+                          text: String(item._row || ""), 
+                          font: "Arial",
+                          size: 20 // Larger data font
+                        })],
+                        alignment: AlignmentType.CENTER
+                      })],
+                      margins: { top: 150, bottom: 150, left: 100, right: 100 },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ 
+                        children: [new TextRun({ 
+                          text: String(item.displayName || ""), 
+                          font: "Arial",
+                          size: 20
+                        })] 
+                      })],
+                      margins: { top: 150, bottom: 150, left: 100, right: 100 },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ 
+                        children: [new TextRun({ 
+                          text: String(item.email || ""), 
+                          font: "Arial",
+                          size: 20
+                        })] 
+                      })],
+                      margins: { top: 150, bottom: 150, left: 100, right: 100 },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ 
+                        children: [new TextRun({ 
+                          text: String(item.role || ""), 
+                          font: "Arial",
+                          size: 20
+                        })],
+                        alignment: AlignmentType.CENTER
+                      })],
+                      margins: { top: 150, bottom: 150, left: 100, right: 100 },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ 
+                        children: [new TextRun({ 
+                          text: String(item.status || ""), 
+                          font: "Arial",
+                          size: 20
+                        })],
+                        alignment: AlignmentType.CENTER
+                      })],
+                      margins: { top: 150, bottom: 150, left: 100, right: 100 },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ 
+                        children: [new TextRun({ 
+                          text: String(item.telNo || ""), 
+                          font: "Arial",
+                          size: 20
+                        })],
+                        alignment: AlignmentType.CENTER
+                      })],
+                      margins: { top: 150, bottom: 150, left: 100, right: 100 },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ 
+                        children: [new TextRun({ 
+                          text: String(item.address || ""), 
+                          font: "Arial",
+                          size: 20
+                        })] 
+                      })],
+                      margins: { top: 150, bottom: 150, left: 100, right: 100 },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ 
+                        children: [new TextRun({ 
+                          text: createdAt, 
+                          font: "Arial",
+                          size: 20
+                        })],
+                        alignment: AlignmentType.CENTER
+                      })],
+                      margins: { top: 150, bottom: 150, left: 100, right: 100 },
+                    }),
+                  ],
+                });
+              }),
+            ],
+          }),
+        ],
+      },
+    ],
+  });
+
+  Packer.toBlob(doc)
+    .then((blob) => {
+      saveAs(blob, "user-management-report.docx");
+    })
+    .catch((error) => {
+      console.error("Error packing Word document: ", error);
+      alert("There was an error creating the Word document. Please try again.");
+    });
+};
+
+const exportToPDF = () => {
+  const doc = new jsPDF('landscape'); 
+  doc.text("User Management Report", 20, 20); 
+  
+  // Table headers
+  const headers = ["ID", "Username", "Email", "Role", "Status", "Tel No", "Address", "Created At"];
+  
+  // Table rows mapping
+  const rows = filteredWithRowNumber.map((item) => {
+    // Format timestamp to readable date
+    const createdAt = new Date(item.createdAt).toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    return [
+      item._row,                    // ID
+      item.displayName,             // Username
+      item.email,                   // Email
+      item.role,                    // Role
+      item.status,                  // Status
+      item.telNo,                   // Tel No
+      item.address,                 // Address
+      createdAt                     // Created At in readable format
+    ];
+  });
+  
+  // Using autoTable to create the table in the PDF
+  doc.autoTable({
+    head: [headers],
+    body: rows,
+    startY: 30,  // Start position for the table
+    theme: 'grid',  // Adds gridlines
+    headStyles: {
+      fillColor: [54, 76, 110],  // Change header background color
+      textColor: [255, 255, 255], // Change text color in header
+    },
+    bodyStyles: {
+      fontSize: 10, // Font size for the table content
+    },
+    margin: { top: 30 }, // Top margin for the table
+    styles: {
+      cellPadding: 5,  // Padding inside each cell
+    }
+  });
+  
+  // Saving the PDF
+  doc.save("user-management-report.pdf");
+};
 
   const navLinks = [
     { to: "/dashboardAdmin", img: IconDashboard, label: "Dashboard" },
@@ -104,7 +487,7 @@ export default function DashboardSuperLayout() {
 
           // Exclude "Admin" role
           if (
-            ["Driver", "Cashier", "Reliever", "Conductor", "Inspector"].includes(role)
+            ["Driver", "Cashier", "Reliever", "Inspector"].includes(role)
           ) {
             temp.push({
               id: d.id,
@@ -113,7 +496,7 @@ export default function DashboardSuperLayout() {
               role: x.role ?? "Driver",
               status: x.status ?? "Active",
               telNo: x.telNo ?? "",
-              createdAtMs: toMillis(x.createdAt),
+              createdAt: toMillis(x.createdAt),
               firstName: x.firstName,
               middleName: x.middleName,
               lastName: x.lastName,
@@ -123,7 +506,7 @@ export default function DashboardSuperLayout() {
         });
 
         temp.sort((a, b) => {
-          if (a.createdAtMs !== b.createdAtMs) return a.createdAtMs - b.createdAtMs;
+          if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
           return (a.displayName || "").localeCompare(b.displayName || "");
         });
 
@@ -131,7 +514,7 @@ export default function DashboardSuperLayout() {
         setLoading(false);
       },
       (e) => {
-        setErr(e.message || "Failed to load admins");
+        setErr(e.message || "Failed to load users");
         setLoading(false);
       }
     );
@@ -511,7 +894,6 @@ export default function DashboardSuperLayout() {
                       <option value="Driver">Driver</option>
                       <option value="Cashier">Cashier</option>
                       <option value="Reliever">Reliever</option>
-                      <option value="Conductor">Conductor</option>
                       <option value="Inspector">Inspector</option>
                     </select>
                   </div>
@@ -535,30 +917,49 @@ export default function DashboardSuperLayout() {
                       </svg>
                     </div>
                   </div>
+                  
+                  <div className="relative">
+                  {/* Export Button */}
+                  <button
+                    onClick={toggleDropdown}
+                    className="flex items-center gap-2 px-9 py-2 rounded-lg text-white shadow-md hover:shadow-lg transition"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    <span className="font-semibold">Export</span>
+                  </button>
 
-                  {/* Export to CSV */}
-                            <CSVLink
-                data={filteredWithRowNumber.map((item) => {
-                    const { _row, ...rest } = item;  // Remove the _row field
-                    return { ...rest, id: item._row }; // Replace 'id' with the row number
-                })}
-                className="flex items-center gap-2 px-9 py-2 rounded-lg text-white shadow-md hover:shadow-lg transition"
-                style={{ backgroundColor: primaryColor }}
-                >
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                >
-                    <path d="M12 5v14M5 12h14" />
-                </svg>
-                <span className="font-semibold">Export</span>
-                </CSVLink>
+                  {/* Dropdown Menu */}
+                  {isDropdownOpen && (
+                    <div className="absolute right-0 w-40 mt-2 bg-white shadow-lg rounded-lg z-10">
+                      <ul className="text-sm">
+                        <li>
+                          <button
+                            onClick={exportToCSV}
+                            className="block px-4 py-2 text-gray-800 hover:bg-gray-100 w-full text-left"
+                          >
+                            Export to Excel
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={exportToWord}
+                            className="block px-4 py-2 text-gray-800 hover:bg-gray-100 w-full text-left"
+                          >
+                            Export to Word
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={exportToPDF}
+                            className="block px-4 py-2 text-gray-800 hover:bg-gray-100 w-full text-left"
+                          >
+                            Export to PDF
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
                   <button
                     onClick={openAdd}
                     className="flex items-center gap-2 px-9 py-2 rounded-lg text-white shadow-md hover:shadow-lg transition"
@@ -827,7 +1228,6 @@ export default function DashboardSuperLayout() {
                   <option value="Driver">Driver</option>
                   <option value="Cashier">Cashier</option>
                   <option value="Reliever">Reliever</option>
-                  <option value="Conductor">Conductor</option>
                   <option value="Inspector">Inspector</option>
                 </select>
               </div>
@@ -991,7 +1391,6 @@ export default function DashboardSuperLayout() {
                   <option value="Driver">Driver</option>
                   <option value="Cashier">Cashier</option>
                   <option value="Reliever">Reliever</option>
-                  <option value="Conductor">Conductor</option>
                   <option value="Inspector">Inspector</option>
                 </select>
               </div>

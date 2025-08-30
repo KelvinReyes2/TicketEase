@@ -19,6 +19,7 @@ import MainLogo from "../images/MainLogo.png";
 import SideLogo from "../images/SideLogo.png";
 import server from "../images/serverMaintenance.png";
 import { motion } from "framer-motion";
+
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,9 +39,9 @@ function Login() {
 
   const navigate = useNavigate();
 
-  // 🔹 Listen to Firestore system status in real-time
+  // Listen to Firestore system status in real-time
   useEffect(() => {
-    const systemDocRef = doc(db, "system", "Status"); // 👈 adjust if your doc id differs
+    const systemDocRef = doc(db, "system", "Status");
     const unsubscribe = onSnapshot(
       systemDocRef,
       (snapshot) => {
@@ -56,9 +57,9 @@ function Login() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, []); // Only subscribe once when component is mounted
 
-  // 🔹 Clean up old localStorage entries (password reset cache)
+  // Clean up old localStorage entries (password reset cache)
   useEffect(() => {
     const cleanupOldEntries = () => {
       const keys = Object.keys(localStorage);
@@ -75,26 +76,7 @@ function Login() {
     cleanupOldEntries();
   }, []);
 
-  const hasRecentPendingRequest = (email) => {
-    const key = `passwordReset_${email}`;
-    const data = localStorage.getItem(key);
-    if (data) {
-      const parsedData = JSON.parse(data);
-      const oneHourAgo = Date.now() - 10 * 1000; // 10s throttle
-      return parsedData.timestamp > oneHourAgo && parsedData.status === "pending";
-    }
-    return false;
-  };
-
-  const storeRequestLocally = (email) => {
-    const key = `passwordReset_${email}`;
-    const data = {
-      timestamp: Date.now(),
-      status: "pending",
-    };
-    localStorage.setItem(key, JSON.stringify(data));
-  };
-
+  // Helper function to get user-friendly error messages
   const getFirebaseErrorMessage = (error) => {
     switch (error.code) {
       case "auth/user-not-found":
@@ -118,10 +100,11 @@ function Login() {
     }
   };
 
-  // 🔹 Login handler
+  // Login handler
   const handleLogin = async (e) => {
     e.preventDefault();
 
+    // Check if system is in maintenance mode
     if (systemStatus === "Maintenance Mode") {
       setError("The system is currently under maintenance. Please try again later.");
       return;
@@ -141,6 +124,13 @@ function Login() {
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         const role = (userDoc.data().role || "").toLowerCase();
+        const status = userDoc.data().status; // Get user status
+
+        if (status === "Inactive") {
+          setError("Your account is inactive. Please contact support.");
+          setLoading(false);
+          return;
+        }
 
         switch (role) {
           case "admin":
@@ -165,7 +155,21 @@ function Login() {
     }
   };
 
-  // 🔹 Reset password request
+  // Check for recent pending request in Firestore
+  const hasRecentPendingRequest = async (email) => {
+    const requestsRef = collection(db, "passwordRequestReset");
+    const existingQuery = query(
+      requestsRef,
+      where("user", "==", email),
+      where("status", "in", ["pending", "on hold"]) // Checking for both pending and on hold status
+    );
+    
+    const existingSnapshot = await getDocs(existingQuery);
+
+    return !existingSnapshot.empty; // If there are pending requests, return true
+  };
+
+  // Reset password request
   const handleResetPassword = async (e) => {
     e.preventDefault();
     setResetMessage("");
@@ -173,15 +177,7 @@ function Login() {
     setResetLoading(true);
 
     try {
-      if (hasRecentPendingRequest(resetEmail)) {
-        setResetMessage(
-          "You already submitted a password reset request recently. Please wait before submitting another."
-        );
-        setResetMessageType("warning");
-        setResetLoading(false);
-        return;
-      }
-
+      // Check if user exists
       const usersRef = collection(db, "users");
       const userQuery = query(usersRef, where("email", "==", resetEmail));
       const userSnapshot = await getDocs(userQuery);
@@ -196,33 +192,26 @@ function Login() {
       const userDoc = userSnapshot.docs[0];
       const userRole = userDoc.data().role || "unknown";
 
-      const requestsRef = collection(db, "passwordRequestReset");
-      const existingQuery = query(
-        requestsRef,
-        where("user", "==", resetEmail),
-        where("status", "==", "pending")
-      );
+      // Check if there are any pending requests in Firestore
+      const isRequestPending = await hasRecentPendingRequest(resetEmail);
 
-      const existingSnapshot = await getDocs(existingQuery);
-      if (!existingSnapshot.empty) {
-        storeRequestLocally(resetEmail);
+      if (isRequestPending) {
         setResetMessage(
-          "You already have a pending password reset request. Please wait for Super Admin's approval."
+          "You already have a pending password reset request. Please wait for approval."
         );
         setResetMessageType("warning");
         setResetLoading(false);
         return;
       }
 
+      const requestsRef = collection(db, "passwordRequestReset");
       await addDoc(requestsRef, {
         user: resetEmail,
         role: userRole,
-        status: "pending",
+        status: "pending", // Set the status to pending initially
         requestedAt: serverTimestamp(),
         approvedBy: null,
       });
-
-      storeRequestLocally(resetEmail);
 
       setResetMessage(
         "Password reset request submitted successfully. Please wait for Super Admin's approval."
@@ -238,6 +227,7 @@ function Login() {
     }
   };
 
+  // Reset fields when closing the reset password frame
   const closeResetFrame = () => {
     setShowReset(false);
     setResetEmail("");
@@ -246,6 +236,7 @@ function Login() {
     setResetLoading(false);
   };
 
+  // Clear error when user starts typing
   const handleEmailChange = (e) => {
     setEmail(e.target.value);
     if (error) setError("");
@@ -256,75 +247,74 @@ function Login() {
     if (error) setError("");
   };
 
-
-
+  // Render maintenance mode screen
   if (systemStatus === "Maintenance Mode") {
     return (
-       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
-      <div className="absolute inset-0 z-0">
-        <svg
-          className="absolute top-0 left-0 w-full h-full opacity-50"
-          xmlns="http://www.w3.org/2000/svg"
-          preserveAspectRatio="none"
-          viewBox="0 0 800 600"
-        >
-          <path
-            d="M0,200 C150,300 350,100 500,200 C650,300 850,100 1000,200 L1000,00 L0,0 Z"
-            fill="#196cd1ff"
-            opacity="1"
-          />
-          <path
-            d="M0,400 C200,500 400,300 600,400 C800,500 1000,300 1200,400 L1200,0 L0,0 Z"
-            fill="#1a69e0ff"
-            opacity="0.5"
-          />
-        </svg>
-      </div>
-
-      <div className="w-full max-w-[900px] flex flex-col items-center text-center px-6 z-10">
-        {/* 🖼️ Server Image with BounceIn */}
-        <div className="mb-8 flex justify-center">
-          <motion.img
-            src={server}
-            alt="Server Maintenance"
-            className="w-70 md:w-[420px] drop-shadow-lg"
-            initial={{ scale: 0.3, opacity: 0, y: -100 }}
-            animate={{
-              scale: [0.3, 1.2, 0.9, 1.05, 1],
-              opacity: 1,
-              y: 0,
-            }}
-            transition={{
-              duration: 1.2,
-              ease: "easeOut",
-            }}
-          />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <svg
+            className="absolute top-0 left-0 w-full h-full opacity-50"
+            xmlns="http://www.w3.org/2000/svg"
+            preserveAspectRatio="none"
+            viewBox="0 0 800 600"
+          >
+            <path
+              d="M0,200 C150,300 350,100 500,200 C650,300 850,100 1000,200 L1000,00 L0,0 Z"
+              fill="#196cd1ff"
+              opacity="1"
+            />
+            <path
+              d="M0,400 C200,500 400,300 600,400 C800,500 1000,300 1200,400 L1200,0 L0,0 Z"
+              fill="#1a69e0ff"
+              opacity="0.5"
+            />
+          </svg>
         </div>
 
-        <motion.h1
-          className="text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight tracking-wide mt-20"
-          initial={{ y: 40, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 1, duration: 0.8 }}
-        >
-          System <br />
-          <span className="text-blue-600 drop-shadow-2xl  ">Maintenance</span>
-        </motion.h1>
+        <div className="w-full max-w-[900px] flex flex-col items-center text-center px-6 z-10">
+          {/* Server Image with BounceIn */}
+          <div className="mb-8 flex justify-center">
+            <motion.img
+              src={server}
+              alt="Server Maintenance"
+              className="w-70 md:w-[420px] drop-shadow-lg"
+              initial={{ scale: 0.3, opacity: 0, y: -100 }}
+              animate={{
+                scale: [0.3, 1.2, 0.9, 1.05, 1],
+                opacity: 1,
+                y: 0,
+              }}
+              transition={{
+                duration: 1.2,
+                ease: "easeOut",
+              }}
+            />
+          </div>
 
-        <motion.p
-          className="text-gray-600 text-lg md:text-xl font-medium mt-4"
-          initial={{ y: 40, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 1.5, duration: 0.8 }}
-        >
-          {systemMessage || "We’re currently working on improvements. Please check back soon."}
-        </motion.p>
+          <motion.h1
+            className="text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight tracking-wide mt-20"
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 1, duration: 0.8 }}
+          >
+            System <br />
+            <span className="text-blue-600 drop-shadow-2xl">Maintenance</span>
+          </motion.h1>
+
+          <motion.p
+            className="text-gray-600 text-lg md:text-xl font-medium mt-4"
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 1.5, duration: 0.8 }}
+          >
+            {systemMessage || "We're currently working on improvements. Please check back soon."}
+          </motion.p>
+        </div>
       </div>
-    </div>
     );
   }
 
-  // 🔹 Normal login screen
+  // Normal login screen
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200">
       {loading && (
@@ -421,6 +411,7 @@ function Login() {
       {showReset && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-lg relative animate-fadeInUp">
+            {/* Header */}
             <div className="flex flex-col items-center text-center">
               <div className="w-16 h-16 flex items-center justify-center rounded-full bg-indigo-100 text-indigo-600 mb-4">
                 <KeyRound size={32} strokeWidth={2.5} />
@@ -431,6 +422,7 @@ function Login() {
               </p>
             </div>
 
+            {/* Messages */}
             {resetMessage && (
               <div
                 className={`w-full px-5 py-3 rounded-lg text-sm font-medium text-center mb-4 ${
@@ -445,6 +437,7 @@ function Login() {
               </div>
             )}
 
+            {/* Form */}
             <form onSubmit={handleResetPassword} className="space-y-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">
@@ -453,9 +446,7 @@ function Login() {
                 <input
                   type="email"
                   className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-4 focus:ring-indigo-300 transition-all ${
-                    resetMessageType === "error"
-                      ? "border-red-300 bg-red-50"
-                      : "border-gray-300"
+                    resetMessageType === "error" ? "border-red-300 bg-red-50" : "border-gray-300"
                   }`}
                   placeholder="Enter your email..."
                   value={resetEmail}
@@ -474,6 +465,7 @@ function Login() {
               </button>
             </form>
 
+            {/* Close */}
             <button
               onClick={closeResetFrame}
               disabled={resetLoading}

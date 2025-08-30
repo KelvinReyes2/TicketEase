@@ -455,6 +455,12 @@ export default function DashboardAdmin() {
                           backgroundColor: isActive ? "white" : "transparent",
                           color: isActive ? primaryColor : "white",
                         }}
+                        onMouseEnter={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = hoverBg;
+                        }}
+                       onMouseLeave={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
+                        }}
                       >
                         <img
                           src={img}
@@ -467,19 +473,25 @@ export default function DashboardAdmin() {
                         <div className="pl-10 space-y-2 mt-2">
                           <Link
                             to="/report1"
-                            className="block px-4 py-2 rounded-lg hover:bg-gray-300"
+                            className="block px-4 py-2 rounded-lg"
+                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
+                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                           >
                             Transaction Overview
                           </Link>
                           <Link
                             to="/report2"
-                            className="block px-4 py-2 rounded-lg hover:bg-gray-300"
+                            className="block px-4 py-2 rounded-lg"
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                           >
                             Quota Summary
                           </Link>
                           <Link
                             to="/report3"
-                            className="block px-4 py-2 rounded-lg hover:bg-gray-300"
+                            className="block px-4 py-2 rounded-lg"
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                           >
                             Trip Logs
                           </Link>
