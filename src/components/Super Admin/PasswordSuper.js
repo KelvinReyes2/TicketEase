@@ -29,7 +29,7 @@ import IconMaintenance from "../../images/Maintenance White.png";
 const auth = getAuth();
 const db = getFirestore();
 
-export default function DashboardPasswordLayout() {
+export default function PasswordSuper() {
   const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
 

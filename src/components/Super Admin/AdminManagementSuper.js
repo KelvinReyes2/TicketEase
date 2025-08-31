@@ -24,7 +24,7 @@ import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
 
 const auth = getAuth();
 
-export default function DashboardSuperLayout() {
+export default function AdminManagementSuper() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");

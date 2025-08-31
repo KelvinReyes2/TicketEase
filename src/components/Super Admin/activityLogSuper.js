@@ -1,9 +1,7 @@
-// src/components/Super Admin/DashboardSuperLayout.js
 import React, { useState } from "react";
 import { getAuth, signOut } from "firebase/auth";
 import { Outlet, Link, useLocation } from "react-router-dom";
 
-// import images from src/images (case-sensitive)
 import LogoM from "../../images/logoM.png";
 import IconDashboard from "../../images/Dashboard White.png";
 import IconActivity from "../../images/Activity Log Blue.png";
@@ -16,7 +14,7 @@ import IconMaintenance from "../../images/Maintenance White.png";
 
 const auth = getAuth();
 
-export default function DashboardSuperLayout() {
+export default function ActivityLogSuper() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const location = useLocation();
 

@@ -1,10 +1,8 @@
-// src/components/Super Admin/DashboardRouteLayout.js
 import React, { useEffect, useMemo, useState } from "react";
 import { getAuth, signOut } from "firebase/auth";
 import { Link, useLocation } from "react-router-dom";
 import DataTable from "react-data-table-component";
 
-// Images
 import LogoM from "../../images/logoM.png";
 import IconDashboard from "../../images/Dashboard White.png";
 import IconActivity from "../../images/Activity White.png";
@@ -15,13 +13,12 @@ import IconUAC from "../../images/UAC White.png";
 import IconKey from "../../images/key.png";
 import IconMaintenance from "../../images/Maintenance White.png";
 
-// Firestore
 import { db } from "../../firebase";
 import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
 
 const auth = getAuth();
 
-export default function DashboardRouteLayout() {
+export default function RouteManagementSuper() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { pathname } = useLocation();
 

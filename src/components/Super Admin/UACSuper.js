@@ -1,22 +1,20 @@
-// src/components/Super Admin/DashboardUACLayout.js
 import React, { useState } from "react";
 import { getAuth, signOut } from "firebase/auth";
 import { Outlet, Link, useLocation } from "react-router-dom";
 
-// ✅ import images from src/images (case-sensitive)
 import LogoM from "../../images/logoM.png";
 import IconDashboard from "../../images/Dashboard White.png";
 import IconActivity from "../../images/Activity White.png";
 import IconAdmin from "../../images/Admin.png";
 import IconMap from "../../images/Map White.png";
 import IconQuota from "../../images/Quota.png";
-import IconUACBlue from "../../images/UAC Blue.png"; // current page icon
+import IconUACBlue from "../../images/UAC Blue.png"; 
 import IconKey from "../../images/key.png";
 import IconMaintenance from "../../images/Maintenance White.png";
 
 const auth = getAuth();
 
-export default function DashboardUACLayout() {
+export default function UACSuper() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { pathname } = useLocation();
 

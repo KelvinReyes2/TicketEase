@@ -17,7 +17,7 @@ import IconMaintenanceBlue from "../../images/Maintenance Blue.png"; // current 
 
 const auth = getAuth();
 
-export default function DashboardMaintenanceLayout() {
+export default function MaintenanceSuper() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [status, setStatus] = useState("Operational Mode");
   const [maintenanceMessage, setMaintenanceMessage] = useState("");

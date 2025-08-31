@@ -21,14 +21,17 @@ import "jspdf-autotable";
 import { saveAs } from 'file-saver';
 import { db } from "../../firebase";
 import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
+import IconReport from "../../images/Report.png";
 
 const auth = getAuth();
 
-export default function DashboardSuperLayout() {
+export default function UserManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const location = useLocation();
+  const activeLink = location.pathname;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const toggleDropdown = () => {
     setIsDropdownOpen((prev) => !prev);
@@ -434,11 +437,18 @@ const exportToPDF = () => {
     { to: "/userManagement", img: IconUser, label: "User Management" },
     { to: "/driverDispatch", img: IconDriver, label: "Driver Dispatch" },
     { to: "/vehicleManagement", img: IconVehicle, label: "Vehicle Management" },
+    {
+      to: "#",
+      img: IconReport,
+      label: "Report",
+      isDropdown: true,
+      onClick: () => setIsReportOpen(!isReportOpen),
+    },
   ];
 
   const isUserPage = location.pathname === "/userManagement";
 
-  const [admins, setAdmins] = useState([]);
+  const [user, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
 
@@ -510,7 +520,7 @@ const exportToPDF = () => {
           return (a.displayName || "").localeCompare(b.displayName || "");
         });
 
-        setAdmins(temp);
+        setUsers(temp);
         setLoading(false);
       },
       (e) => {
@@ -523,14 +533,14 @@ const exportToPDF = () => {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return admins.filter((r) => {
+    return user.filter((r) => {
       const text = `${r.displayName} ${r.email} ${r.role} ${r.status} ${r.telNo}`.toLowerCase();
       const okSearch = !q || text.includes(q);
       const okFilter = !filterBy || r.status === filterBy;
       const okRoleFilter = !filterRole || r.role === filterRole; // Filter by role
       return okSearch && okFilter && okRoleFilter;
     });
-  }, [admins, search, filterBy, filterRole]);
+  }, [user, search, filterBy, filterRole]);
 
   // Add a computed row number for display
   const filteredWithRowNumber = useMemo(
@@ -713,7 +723,7 @@ const exportToPDF = () => {
   };
 
   // Create auth user then add Firestore profile
-  const saveAdmin = async () => {
+  const saveUser = async () => {
     const e = {};
     if (!form.firstName.trim()) e.firstName = "Required";
     if (!form.lastName.trim()) e.lastName = "Required";
@@ -798,7 +808,7 @@ const exportToPDF = () => {
       setSavingEdit(false);
     }
   };
-
+   
   return (
     <div className="flex bg-gray-100 min-h-screen">
       {/* Sidebar */}
@@ -809,36 +819,93 @@ const exportToPDF = () => {
         <div className="flex flex-col items-center py-6">
           <img src={LogoM} alt="VODACTCO Logo" className="w-40 mb-8" />
           <nav className="w-full px-4 space-y-2 text-sm font-medium">
-            {navLinks.map(({ to, img, label }) => {
-              const isActive = location.pathname === to;
+            {navLinks.map(({ to, img, label, isDropdown, onClick }) => {
+              const isActive = activeLink === to;
               return (
-                <Link
-                  key={to}
-                  to={to}
-                  className={[
-                    "flex items-center px-4 py-2 rounded-lg transition-all duration-200 ease-in-out",
-                    "hover:scale-[1.02] hover:shadow-md",
-                    isActive ? "font-bold" : "font-medium",
-                  ].join(" ")}
-                  style={{
-                    backgroundColor: isActive ? "white" : "transparent",
-                    color: isActive ? primaryColor : "white",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = hoverBg;
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
-                  }}
-                >
-                  <img
-                    src={img}
-                    alt={label}
-                    className="w-5 h-5 mr-3 flex-shrink-0 object-contain"
-                    draggable="false"
-                  />
-                  <span>{label}</span>
-                </Link>
+                <div key={label}>
+                  {/* Regular link */}
+                  {!isDropdown ? (
+                    <Link
+                      to={to}
+                      className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-md ${
+                        isActive ? "font-bold" : "font-medium"
+                      }`}
+                      style={{
+                        backgroundColor: isActive ? "white" : "transparent",
+                        color: isActive ? primaryColor : "white",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = hoverBg;
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
+                      }}
+                    >
+                      <img
+                        src={img}
+                        alt={label}
+                        className="w-5 h-5 mr-3 flex-shrink-0 object-contain"
+                        style={isActive && label === "Dashboard" ? { filter: "none", boxShadow: "none" } : {}}
+                        draggable="false"
+                      />
+                      <span>{label}</span>
+                    </Link>
+                  ) : (
+                    <div>
+                      <button
+                        onClick={onClick}
+                        className={`flex items-center px-4 py-2 rounded-lg w-full transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-md ${
+                          isActive ? "font-bold" : "font-medium"
+                        }`}
+                        style={{
+                          backgroundColor: isActive ? "white" : "transparent",
+                          color: isActive ? primaryColor : "white",
+                        }}
+                        onMouseEnter={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = hoverBg;
+                        }}
+                       onMouseLeave={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
+                        }}
+                      >
+                        <img
+                          src={img}
+                          alt={label}
+                          className="w-5 h-5 mr-3 flex-shrink-0 object-contain"
+                        />
+                        <span>{label}</span>
+                      </button>
+                      {isReportOpen && (
+                        <div className="pl-10 space-y-2 mt-2">
+                          <Link
+                            to="/report1"
+                            className="block px-4 py-2 rounded-lg"
+                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
+                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                          >
+                            Transaction Overview
+                          </Link>
+                          <Link
+                            to="/report2"
+                            className="block px-4 py-2 rounded-lg"
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                          >
+                            Quota Summary
+                          </Link>
+                          <Link
+                            to="/report3"
+                            className="block px-4 py-2 rounded-lg"
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverBg}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                          >
+                            Trip Logs
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </nav>
@@ -981,7 +1048,6 @@ const exportToPDF = () => {
                   </button>
                 </div>
               </div>
-
               <div className="px-6 py-4 flex-1">
                 {err && (
                   <div className="mb-3 text-red-700 bg-red-50 border border-red-200 px-3 py-2 rounded">
@@ -1244,7 +1310,7 @@ const exportToPDF = () => {
               <button
                 className="px-4 py-2 rounded-lg text-white hover:opacity-95 disabled:opacity-60 inline-flex items-center gap-2"
                 style={{ backgroundColor: primaryColor }}
-                onClick={saveAdmin}
+                onClick={saveUser}
                 disabled={saving}
               >
                 {saving && (
