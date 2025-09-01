@@ -875,6 +875,7 @@ const exportToPDF = () => {
                         />
                         <span>{label}</span>
                       </button>
+                      
                       {isReportOpen && (
                         <div className="pl-10 space-y-2 mt-2">
                           <Link
