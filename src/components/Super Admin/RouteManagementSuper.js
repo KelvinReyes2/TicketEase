@@ -79,7 +79,7 @@ export default function RouteManagementSuper() {
   // Field-level errors (Add Route)
   const [errors, setErrors] = useState({});
 
-  // Success toast for editing route details
+  const [showAddToast, setShowAddToast] = useState(false);
   const [showEditToast, setShowEditToast] = useState(false);
 
   // View/Edit modal
@@ -476,6 +476,8 @@ const filtered = useMemo(() => {
         Status: form.Status || "Active",
       });
       closeAdd();
+    
+      setShowAddToast(true);
     } catch (e) {
       alert(e.message || String(e));
     } finally {
@@ -514,13 +516,22 @@ const filtered = useMemo(() => {
 
       // Show the success toast animation for edit
       setShowEditToast(true);
-      setTimeout(() => setShowEditToast(false), 3000); // Hide after 3 seconds
+      setTimeout(() => setShowEditToast(false), 3000); 
     } catch (e) {
       alert(e.message || String(e));
     } finally {
       setSavingEdit(false);
     }
   };
+
+  useEffect(() => {
+  // Cleanup timeout when component unmounts
+  return () => {
+    if (showEditToast) {
+      clearTimeout();
+    }
+  };
+}, [showEditToast]);
 
   return (
     <div className="flex bg-gray-100 min-h-screen">
@@ -1112,6 +1123,26 @@ const filtered = useMemo(() => {
           <div className="text-sm">
             <div className="font-semibold">Route updated successfully</div>
             <div className="text-green-700/80">Your route details have been updated.</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Success Toast for Added Route */}
+      <div
+        aria-live="polite"
+        className={`fixed top-5 left-1/2 -translate-x-1/2 z-[60] transform transition-all duration-300 ${
+          showAddToast ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3 pointer-events-none"
+        }`}
+      >
+        <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-green-800 shadow-md w-[520px] max-w-[90vw]">
+          <div className="mt-0.5">
+            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-green-500">
+              <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+            </svg>
+          </div>
+          <div className="text-sm">
+            <div className="font-semibold">Route added successfully</div>
+            <div className="text-green-700/80">Your new route has been added.</div>
           </div>
         </div>
       </div>
