@@ -38,7 +38,6 @@ export default function QuotaManagementSuper() {
   const [toastMessage, setToastMessage] = useState("");
   
   const [currentQuota, setCurrentQuota] = useState(0);
-  const [quotaDocId, setQuotaDocId] = useState(null);
   const [newQuota, setNewQuota] = useState("");
   const [confirmQuota, setConfirmQuota] = useState("");
   const [loading, setLoading] = useState(true);
@@ -46,7 +45,6 @@ export default function QuotaManagementSuper() {
   const [quotaMatchError, setQuotaMatchError] = useState(false);
 
   const openModal = () => setIsModalOpen(true);
-
 
   const handleSignOut = async () => {
     try {
@@ -69,7 +67,7 @@ export default function QuotaManagementSuper() {
     { to: "/MaintenanceSuper", img: IconMaintenance, label: "Maintenance" },
   ];
 
-  // Fetch latest quota document
+  // Fetch latest quota document to display current quota
   useEffect(() => {
     const fetchQuota = async () => {
       try {
@@ -81,7 +79,6 @@ export default function QuotaManagementSuper() {
         const snap = await getDocs(q);
         if (!snap.empty) {
           const docSnap = snap.docs[0];
-          setQuotaDocId(docSnap.id);
           setCurrentQuota(parseFloat(docSnap.data().TargetQuota) || 0);
         }
       } catch (e) {
@@ -93,7 +90,7 @@ export default function QuotaManagementSuper() {
     fetchQuota();
   }, []);
 
-  // Save updated quota
+  // Save updated quota to ALL documents in the quota collection
   const handleSaveQuota = async () => {
     if (!newQuota || !confirmQuota) {
       return; // Simply return without saving if fields are empty
@@ -115,21 +112,34 @@ export default function QuotaManagementSuper() {
         return;
       }
 
-      await updateDoc(doc(db, "quota", quotaDocId), {
-        TargetQuota: value.toString(),
-        updatedAt: new Date(),
-      });
+      // Fetch ALL documents in the quota collection
+      const quotaQuery = query(collection(db, "quota"));
+      const querySnapshot = await getDocs(quotaQuery);
+      
+      // Update each document with the new TargetQuota
+      const updatePromises = querySnapshot.docs.map(docSnapshot => 
+        updateDoc(doc(db, "quota", docSnapshot.id), {
+          TargetQuota: value.toString(),
+          updatedAt: new Date(),
+        })
+      );
+
+      // Execute all updates
+      await Promise.all(updatePromises);
 
       setCurrentQuota(value);
       setNewQuota("");
       setConfirmQuota("");
 
-      setToastMessage("Quota updated successfully!");
+      setToastMessage(`Quota updated successfully! Updated ${querySnapshot.docs.length} quota records.`);
       setShowSuccessToast(true);
       setTimeout(() => setShowSuccessToast(false), 3000);
     } catch (e) {
       console.error("Error saving quota:", e);
       setQuotaMatchError(true); // Set error state to true if there's an issue saving the quota
+      setToastMessage("Error updating quota. Please try again.");
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
     } finally {
       setSaving(false); // Stop saving
     }
@@ -232,7 +242,7 @@ export default function QuotaManagementSuper() {
                   <p className="text-base text-gray-500 mb-4">
                     NOTE: If you want to modify the current quota, input the new quota and
                     retype the quota to confirm that you really want to change it. This is
-                    applicable to all active drivers.
+                    applicable to all active drivers and will update ALL quota records.
                   </p>
 
                   <input

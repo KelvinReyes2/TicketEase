@@ -9,6 +9,7 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
     "apexcharts": "^5.3.4",
+    "date-fns": "^4.1.0",
     "docx": "^9.5.1",
     "docxtemplater": "^3.65.3",
     "file-saver": "^2.0.5",

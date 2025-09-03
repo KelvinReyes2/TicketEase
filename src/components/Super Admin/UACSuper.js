@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getAuth, signOut } from "firebase/auth";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import DataTable from "react-data-table-component";
-import { FaEdit, FaEye } from "react-icons/fa";
+import { FaEye } from "react-icons/fa";
 import LogoM from "../../images/logoM.png";
 import IconDashboard from "../../images/Dashboard White.png";
 import IconActivity from "../../images/Activity White.png";
@@ -66,26 +66,42 @@ export default function UACSuper() {
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Updated available permissions to match actual admin permissions
-  const availablePermissions = [
-    "Dashboard Admin",
-    "Driver Dispatch", 
-    "Unit Tracking",
-    "Report",
-    "User Management",
-    "Vehicle Management"
-  ];
+  // Permissions grouped by role (copied from App.js)
+  const availablePermissions = {
+    Admin: [
+      "Dashboard Admin",
+      "Unit Tracking",
+      "User Management",
+      "Driver Dispatch",
+      "Vehicle Management",
+    ],
+    Cashier: [
+      "View Dashboard",
+    ],
+    Super: [
+      "Super Dashboard",
+      "View Activity Log",
+      "Manage Admins",
+      "Manage Routes",
+      "Manage Quotas",
+      "Manage User Access",
+      "Password Reset",
+      "Manage Maintenance",
+    ],
+  };
 
-  const availableRoles = ["System Admin", "Admin", "User"];
+  // Available roles (aligning with your system)
+  const availableRoles = ["Admin", "Cashier", "Super"];
 
   useEffect(() => {
     if (!isUACPage) return;
-    
+
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
       try {
         const temp = [];
         snap.forEach((d) => {
           const data = d.data();
-          if (data && data.role !== "Super Admin") { // Exclude Super Admin from the list
+          if (data && ["Super", "Admin", "Cashier"].includes(data.role)) { // Filter for specific roles
             temp.push({
               id: d.id,
               email: data.email || "",
@@ -131,10 +147,12 @@ export default function UACSuper() {
   const RoleBadge = ({ value }) => {
     const getColorClasses = (role) => {
       switch (role) {
-        case "System Admin":
-          return "bg-red-100 text-red-700 border-red-200";
         case "Admin":
           return "bg-blue-100 text-blue-700 border-blue-200";
+        case "Cashier":
+          return "bg-green-100 text-green-700 border-green-200";
+        case "Super":
+          return "bg-red-100 text-red-700 border-red-200";
         default:
           return "bg-gray-100 text-gray-700 border-gray-200";
       }
@@ -217,7 +235,7 @@ export default function UACSuper() {
               setEdit({ ...row });
             }}
             title="View"
-            className="inline-flex items-center justify-center h-8 px-2 rounded border border-gray-200 bg-white text-gray-700 hover:shadow-md transition text-sm"
+            className="inline-flex items-center justify-center h-8 w-8 rounded-full border border-gray-200 bg-white text-gray-700 hover:shadow-md transition text-sm"
           >
             <FaEye size={12} />
           </button>
@@ -295,14 +313,14 @@ export default function UACSuper() {
 
   const togglePermission = (permission) => {
     if (!edit) return;
-    
+
     const currentPermissions = edit.permissions || [];
     const hasPermission = currentPermissions.includes(permission);
-    
+
     const newPermissions = hasPermission
       ? currentPermissions.filter(p => p !== permission)
       : [...currentPermissions, permission];
-    
+
     setEdit({ ...edit, permissions: newPermissions });
   };
 
@@ -322,9 +340,7 @@ export default function UACSuper() {
                 <Link
                   key={to}
                   to={to}
-                  className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-md ${
-                    isActive ? "font-bold" : "font-medium"
-                  }`}
+                  className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-md ${isActive ? "font-bold" : "font-medium"}`}
                   style={{
                     backgroundColor: isActive ? "white" : "transparent",
                     color: isActive ? primaryColor : "white",
@@ -369,10 +385,7 @@ export default function UACSuper() {
           <Outlet />
         ) : (
           <div className="mx-auto w-full max-w-[1900px]">
-            <div
-              className="bg-white border rounded-xl shadow-sm flex flex-col"
-              style={{ minHeight: "calc(100vh - 112px)" }}
-            >
+            <div className="bg-white border rounded-xl shadow-sm flex flex-col">
               <div className="px-6 pt-6 pb-4 border-b flex items-center justify-between">
                 <h1 className="text-2xl font-semibold text-gray-800">User Access Control</h1>
                 <div className="flex items-center gap-3">
@@ -464,8 +477,7 @@ export default function UACSuper() {
         >
           <div
             className="bg-white rounded-xl shadow-2xl p-12 px-20 w/full max-w-l"
-            onClick={(e) => e.stopPropagation()}
-          >
+            onClick={(e) => e.stopPropagation()}          >
             <h2 className="text-xl font-semibold text-gray-800 text-center mb-4">
               Confirm Sign Out
             </h2>
@@ -551,7 +563,7 @@ export default function UACSuper() {
               <div>
                 <label className="block text-gray-700 font-medium mb-3">Permissions</label>
                 <div className="grid grid-cols-2 gap-3">
-                  {availablePermissions.map((permission) => {
+                  {(availablePermissions[edit.role] || []).map((permission) => {
                     const hasPermission = edit.permissions?.includes(permission);
                     return (
                       <label
@@ -602,7 +614,7 @@ export default function UACSuper() {
                     <path
                       className="opacity-75"
                       fill="currentColor"
-                      d="M4 12a8 8 0 018-8v4A4 4 0 004 12z"
+                      d="M4 12a8 8 0 0 0 8-8v4A4 4 0 0 0 4 12z"
                     />
                   </svg>
                 )}
@@ -615,3 +627,4 @@ export default function UACSuper() {
     </div>
   );
 }
+

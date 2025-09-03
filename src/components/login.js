@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import {
   collection,
   query,
@@ -125,6 +125,10 @@ function Login() {
         const userDoc = querySnapshot.docs[0];
         const role = (userDoc.data().role || "").toLowerCase();
         const status = userDoc.data().status; // Get user status
+        const firstName = userDoc.data().firstName || "Unknown";
+        const lastName = userDoc.data().lastName || "User"; // Get user name
+
+        const fullName = `${firstName} ${lastName}`; // Combine first name and last name
 
         if (status === "Inactive") {
           setError("Your account is inactive. Please contact support.");
@@ -132,18 +136,31 @@ function Login() {
           return;
         }
 
-        switch (role) {
-          case "admin":
-            navigate("/dashboardAdmin");
-            break;
-          case "cashier":
-            navigate("/dashboardCashier");
-            break;
-          case "super":
-            navigate("/dashboardSuper");
-            break;
-          default:
-            setError("Unknown role. Please contact the administrator.");
+        let displayRole = role;
+        if (role === "admin") displayRole = "System Admin";
+        if (role === "cashier") displayRole = "Cashier";
+        // Log the user's activity to Firestore with the fixed activity message
+        await addDoc(collection(db, "systemLogs"), {
+          timestamp: serverTimestamp(),
+          activity: "Logged in to the system", // Fixed activity message
+          role: displayRole,
+          performedBy: fullName,
+        });
+
+        // If the user is 'super', bypass the password reset request process
+        if (role === "super") {
+          navigate("/dashboardSuper");
+        } else {
+          switch (role) {
+            case "admin":
+              navigate("/dashboardAdmin");
+              break;
+            case "cashier":
+              navigate("/dashboardCashier");
+              break;
+            default:
+              setError("Unknown role. Please contact the administrator.");
+          }
         }
       } else {
         setError("No user role found in the database.");
@@ -163,7 +180,7 @@ function Login() {
       where("user", "==", email),
       where("status", "in", ["pending", "on hold"]) // Checking for both pending and on hold status
     );
-    
+
     const existingSnapshot = await getDocs(existingQuery);
 
     return !existingSnapshot.empty; // If there are pending requests, return true
@@ -191,6 +208,16 @@ function Login() {
 
       const userDoc = userSnapshot.docs[0];
       const userRole = userDoc.data().role || "unknown";
+
+      // If the user has the 'super' role, bypass the approval process and send a reset email
+      if (userRole === "Super") {
+        await sendPasswordResetEmail(auth, resetEmail);
+        setResetMessage("Password reset email has been sent to your inbox.");
+        setResetMessageType("success");
+        setResetEmail("");
+        setResetLoading(false);
+        return;
+      }
 
       // Check if there are any pending requests in Firestore
       const isRequestPending = await hasRecentPendingRequest(resetEmail);

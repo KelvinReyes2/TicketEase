@@ -20,7 +20,6 @@ import Maintenance from "./components/Super Admin/MaintenanceSuper";
 
 import PrivateRoute from "./privateRoute";
 
-// (Optional) Simple Forbidden page if you don't have one yet
 const Forbidden = () => (
   <div style={{ padding: 24 }}>
     <h1>403 — Forbidden</h1>
