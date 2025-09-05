@@ -189,7 +189,7 @@ export default function ActivityLogSuper() {
       sortable: true,
       grow: 2,
       cell: (log) => (
-        <div className="truncate" style={{ fontWeight: "bold", fontSize: "15px" }}>
+        <div className="truncate" style={{ fontWeight: "bold", fontSize: "13px" }}>
           <div>{log.performedBy || "Unknown User"}</div>
           <div className="text-s" style={{ fontWeight: "normal" }}>
             {log.role || "Unknown Role"}
@@ -203,7 +203,7 @@ export default function ActivityLogSuper() {
       sortable: true,
       grow: 2,
       cell: (log) => (
-        <div className="truncate" title={log.activity || "No activity description"} style={{fontSize: "15px" }}>
+        <div className="truncate" title={log.activity || "No activity description"} style={{fontSize: "14px" }}>
           {log.activity || "No activity description"}
         </div>
       ),
